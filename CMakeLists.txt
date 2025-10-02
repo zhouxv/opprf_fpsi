@@ -42,8 +42,16 @@ target_link_libraries(main oc::libOTe)
 # # target_link_libraries: Used to specify the library files to be linked. However, directly using relative paths may cause issues.
 target_link_libraries(main ${CMAKE_SOURCE_DIR}/out/install/lib/libblake3.a)
 
+# # ############################################
+# # Link  IPCL                                 #
+# # ############################################
+find_package(IPCL 2.0.0
+    HINTS
+    REQUIRED)
+target_link_libraries(main IPCL::ipcl)
+
 
 # # ############################################
 # # Link  GMP                                  #
 # # ############################################
-# target_link_libraries(main /lib/x86_64-linux-gnu/libgmpxx.a /lib/x86_64-linux-gnu/libgmp.a)
+target_link_libraries(main /lib/x86_64-linux-gnu/libgmpxx.a /lib/x86_64-linux-gnu/libgmp.a)
