@@ -221,14 +221,6 @@ u64 low_bound(const string &prefix) {
   return bitset<NUM_BITS>(temp_str).to_ullong();
 }
 
-// decompose the interval [x, y] and return all maximal enclosing complete
-// subtries
-vector<string> decompose(u64 x, u64 y) {
-  TrieNode root;
-  u64 tree_levels = root.initialize_default(x, y);
-  return root.get_maximal_enclosing_complete_subtries(tree_levels);
-}
-
 // Decompose the interval [min, max] using an improved method in appendix
 vector<string> decompose_improve(u64 min, u64 max) {
   if (min > max) {

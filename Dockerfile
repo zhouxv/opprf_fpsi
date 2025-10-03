@@ -30,6 +30,9 @@ RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
     update-alternatives --set gcc /usr/bin/gcc-13 && \
     update-alternatives --set g++ /usr/bin/g++-13
 
+RUN apt-get update && \
+    apt-get install -y wget
+
 # Install thirdparty dependencies
 COPY ./shell_install_all_dependencies.sh ./
 

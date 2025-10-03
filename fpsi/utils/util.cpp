@@ -26,8 +26,8 @@ void sample_points(u64 dim, u64 delta, u64 send_size, u64 recv_size,
     }
   }
 
-  u64 base_pos = (prng.get<u64>()) % (send_size - intersection_size - 1);
-  // u64 base_pos = 0;
+  // u64 base_pos = (prng.get<u64>()) % (send_size - intersection_size - 1);
+  u64 base_pos = 0;
   for (u64 i = base_pos; i < base_pos + intersection_size; i++) {
     for (u64 j = 0; j < dim; j++) {
       send_pts[i][j] = recv_pts[i - base_pos][j];
@@ -283,55 +283,42 @@ u64 fast_pow(u64 base, u64 exp) {
   return result;
 }
 
-const PrefixParam get_omega_params(u64 metric, u64 delta, u64 dim) {
-  if (metric < 0 || metric > 2) {
-    throw invalid_argument("get_omega_params: Invalid metric value.");
-  }
+// Optimized version using sorting (your approach)
+vector<u64> get_phi_dim_optimized(const vector<pt> &pts, u64 delta) {
+  auto pt_num = pts.size();
+  u64 dim = pts[0].size();
+  vector<u64> common_phi_dims;
 
-  auto delta_align = align_to_interval(delta);
+  // Iterate through each dimension
+  for (u64 d = 0; d < dim; ++d) {
+    // Extract and sort all coordinates in this dimension
+    vector<pair<u64, u64>> intervals; // store (coordinate, original_index)
+    for (u64 i = 0; i < pt_num; ++i) {
+      intervals.push_back({pts[i][d], i});
+    }
 
-  auto t = (metric == 0) ? (delta_align * 2 + 1) : (delta_align + 1);
+    // Sort by coordinate
+    sort(intervals.begin(), intervals.end());
 
-  PrefixParam param;
-  if (dim <= 2) {
-    param = OmegaLowTable::getSelectedParam(t);
-  } else {
-    param = (metric == 0) ? OmegaHighLinfTable::getSelectedParam(t)
-                          : OmegaHighLpTable::getSelectedParam(t);
-  }
-  return param;
-}
+    bool dimension_is_valid = true;
 
-const PrefixParam get_if_match_params(u64 metric, u64 delta) {
-  if (metric != 1 && metric != 2) {
-    throw invalid_argument("get_if_match_params: Invalid metric value.");
-  }
+    // Check adjacent intervals for overlap
+    for (u64 i = 0; i < intervals.size() - 1; ++i) {
+      u64 current_upper = intervals[i].first + delta;
+      u64 next_lower = intervals[i + 1].first - delta;
 
-  auto delta_align = align_to_interval(delta);
+      // If intervals overlap, this dimension cannot be phi for all points
+      if (current_upper >= next_lower) {
+        dimension_is_valid = false;
+        break;
+      }
+    }
 
-  return IfMatchParamTable::getSelectedParam(fast_pow(delta_align, metric) + 1);
-}
-
-const PrefixParam get_fuzzy_mapping_params(u64 metric, u64 delta) {
-  if (metric < 0 || metric > 2) {
-    throw invalid_argument("get_fuzzy_mapping_params: Invalid metric value.");
-  }
-
-  auto delta_align = align_to_interval(delta);
-
-  auto t = delta_align * 2 + 1;
-
-  return FuzzyMappingParamTable::getSelectedParam(t);
-}
-
-u64 align_to_interval(u64 value) {
-  const u64 bounds[] = {16, 32, 64, 128, 256};
-  const u64 size = sizeof(bounds) / sizeof(bounds[0]);
-
-  for (u64 i = 0; i < size; i++) {
-    if (value <= bounds[i]) {
-      return bounds[i];
+    if (dimension_is_valid) {
+      common_phi_dims.push_back(d);
+      // break;
     }
   }
-  throw std::out_of_range("Value out of range 1-256");
+
+  return common_phi_dims;
 }

@@ -10,54 +10,6 @@
 #include <spdlog/spdlog.h>
 
 #include "config.h"
-#include "utils/params_selects.h"
-
-// simle timer
-typedef std::chrono::high_resolution_clock::time_point tVar;
-#define tNow() std::chrono::high_resolution_clock::now()
-#define tStart(t) t = tNow()
-#define tEnd(t)                                                                \
-  std::chrono::duration_cast<std::chrono::milliseconds>(tNow() - t).count()
-
-class simpleTimer {
-public:
-  std::mutex mtx;
-  tVar t;
-  std::map<string, double> timers;
-  std::vector<string> timer_keys;
-
-  simpleTimer() {}
-
-  void start() { tStart(t); }
-  void end(string msg) {
-    timer_keys.push_back(msg);
-    timers[msg] = tEnd(t);
-  }
-
-  void print() {
-    for (const string &key : timer_keys) {
-      spdlog::info("{}: {} ms; {} s", key, timers[key], timers[key] / 1000);
-    }
-  }
-
-  double get_by_key(const string &key) { return timers.at(key); }
-
-  void merge(simpleTimer &other) {
-    std::lock_guard<std::mutex> lock(mtx);
-    std::lock_guard<std::mutex> other_lock(other.mtx);
-
-    auto other_keys = other.timer_keys;
-    auto other_maps = other.timers;
-
-    timer_keys.insert(timer_keys.end(), other_keys.begin(), other_keys.end());
-    timers.insert(other_maps.begin(), other_maps.end());
-  }
-
-  void clear() {
-    timers.clear();
-    timer_keys.clear();
-  }
-};
 
 // Sampling with specified intersection size
 void sample_points(u64 dim, u64 delta, u64 sender_size, u64 recv_size,
@@ -76,26 +28,12 @@ u64 get_position(const pt &cross_point, const pt &source_point, u64 dim);
 vector<pt> intersection(const pt &p, u64 metric, u64 dim, u64 delta,
                         u64 sidelen, u64 blk_cells, u64 delta_l2);
 
-vector<u64> sum_combinations(const oc::span<u32> &results, u64 dim);
+// math compute
 u64 fast_pow(u64 base, u64 exp);
 u64 combination(u64 n, u64 k);
 
-const PrefixParam get_omega_params(u64 metric, u64 delta, u64 dim);
-
-const PrefixParam get_if_match_params(u64 metric, u64 delta);
-
-const PrefixParam get_fuzzy_mapping_params(u64 metric, u64 delta);
-
-inline void padding_vec_8(vector<u64> &vec) {
-  auto size = vec.size();
-  auto remainder = size % 8;
-  if (remainder != 0) {
-    auto padding_num = 8 - remainder;
-    for (u64 i = 0; i < padding_num; i++) {
-      vec.push_back(0);
-    }
-  }
-}
+// delta internal Align Top
+u64 align_to_interval(u64 delta);
 
 struct Monty25519Hash {
   std::size_t operator()(const osuCrypto::Sodium::Monty25519 &point) const {
@@ -106,5 +44,32 @@ struct Monty25519Hash {
   }
 };
 
-// delta internal Align Top
-u64 align_to_interval(u64 value);
+vector<u64> get_phi_dim_optimized(const vector<pt> &pts, u64 delta);
+
+inline block get_value_fmap_opprf(u64 i, string prefix, u64 j, string prefix2) {
+  blake3_hasher hasher;
+  block hash_out;
+  blake3_hasher_init(&hasher);
+  blake3_hasher_update(&hasher, &i, sizeof(i));
+  blake3_hasher_update(&hasher, prefix.data(), prefix.size());
+  blake3_hasher_update(&hasher, &j, sizeof(j));
+  blake3_hasher_update(&hasher, prefix2.data(), prefix2.size());
+
+  blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+
+  return hash_out;
+}
+
+inline void padding_blocks(vector<block> &vals, u64 count) {
+  if (vals.size() >= count) {
+    return;
+  }
+
+  auto padding_count = count - vals.size();
+  auto original_size = vals.size();
+
+  PRNG prng((block(oc::sysRandomSeed())));
+
+  vals.resize(count);
+  prng.get(vals.data() + original_size, padding_count);
+}

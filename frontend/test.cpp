@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "opprf/Opprf.h"
+#include "utils/util.h"
 
 #include <coproto/Socket/LocalAsyncSock.h>
 #include <cryptoTools/Common/CLP.h>
@@ -11,6 +12,7 @@
 #include <cryptoTools/Crypto/PRNG.h>
 #include <macoro/task.h>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 inline auto eval(macoro::task<> &t0, macoro::task<> &t1) {
   auto r =
@@ -76,18 +78,21 @@ void test_opprf(const oc::CLP &cmd) {
   PRNG prng0(block(0, 0));
   PRNG prng1(block(0, 1));
 
-  std::vector<block> vals(n), out(n), recvOut(n);
+  std::vector<block> vals(n), out(n);
 
   prng0.get(vals.data(), n);
   prng0.get(out.data(), n);
 
-  auto p0 = sender.send(n, vals, out, prng0, 1, sockets[0]);
-  auto p1 = recver.receive(n, vals, recvOut, prng1, 1, sockets[1]);
+  std::vector<block> vals_2(vals.begin(), vals.begin() + n / 2);
+  std::vector<block> recvOut(vals_2.size());
+
+  auto p0 = sender.send(vals_2.size(), vals, out, prng0, 1, sockets[0]);
+  auto p1 = recver.receive(vals.size(), vals_2, recvOut, prng1, 1, sockets[1]);
 
   eval(p0, p1);
 
   u64 count = 0;
-  for (u64 i = 0; i < n; ++i) {
+  for (u64 i = 0; i < 10; ++i) {
     auto v = sender.eval<block>(vals[i]);
 
     if (count < 10) {
@@ -108,4 +113,33 @@ void test_Vole_Noisy(const oc::CLP &cmd) {
     Vole_Noisy_test_impl<block, block, CoeffCtxGF128>(n);
     Vole_Noisy_test_impl<std::array<u32, 11>, u32, CoeffCtxArray<u32, 11>>(n);
   }
+}
+
+void test_get_phi(const oc::CLP &cmd) {
+  auto num = cmd.getOr("n", 8);
+  auto dim = cmd.getOr("d", 2);
+  auto delta = cmd.getOr("delta", 10);
+  auto trait = cmd.getOr("trait", 10);
+  auto pt_num = 1 << num;
+  vector<pt> pts(pt_num, vector<u64>(dim, 0));
+
+  cout << "pt_num: " << pt_num << ", dim: " << dim << " , delta: " << delta
+       << endl;
+
+  u64 count = 0;
+  for (u64 i = 0; i < trait; i++) {
+    PRNG prng(oc::sysRandomSeed());
+
+    for (u64 i = 0; i < pt_num; i++) {
+      for (u64 j = 0; j < dim; j++) {
+        pts[i][j] = (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 3 * delta) +
+                    1.5 * delta;
+      }
+    }
+
+    auto phi = get_phi_dim_optimized(pts, delta);
+    if (phi[0] == 0)
+      count++;
+  }
+  cout << "count: " << count << endl;
 }
