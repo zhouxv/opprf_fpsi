@@ -59,5 +59,8 @@ public:
   };
 
   void DFmap_offline();
+  void DFmap_offline_fake();
   void DFmap_online();
+
+  void simple_hash_fake();
 };

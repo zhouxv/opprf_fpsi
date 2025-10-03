@@ -56,6 +56,29 @@ void FPSISender::DFmap_offline() {
                 opprf_num, dfmap_opprf_0_keys.size());
 }
 
+void FPSISender::DFmap_offline_fake() {
+  auto t = DELTA * 2 + 1;
+  DFMAP_PARAM = DFmapParamTable::getSelectedParam(t);
+
+  //   get r_(x,i)
+  t_y_i.resize(PTS_NUM, vector<block>(DIM));
+
+  for (u64 i = 0; i < PTS_NUM; i++) {
+    sender_prng.get(t_y_i[i].data(), DIM);
+  }
+
+  // In our implementation, the probability that φ(x) equals 0 is high.
+  u64 φ = 0;
+
+  auto opprf_num =
+      DFMAP_PARAM.first.size() * DFMAP_PARAM.first.size() * PTS_NUM * DIM;
+  dfmap_opprf_0_keys.reserve(opprf_num);
+  dfmap_opprf_1_vals.reserve(opprf_num);
+
+  padding_blocks(dfmap_opprf_0_keys, opprf_num);
+  padding_blocks(dfmap_opprf_1_vals, opprf_num);
+}
+
 void FPSISender::DFmap_online() {
 
   u64 dfmap_opprf_0_other_num;
@@ -88,3 +111,5 @@ void FPSISender::DFmap_online() {
   // t_y_i.clear();
   // t_y_i.shrink_to_fit();
 }
+
+void FPSISender::simple_hash_fake() {}

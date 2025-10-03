@@ -68,6 +68,31 @@ void FPSIRecv::DFmap_offline() {
   }
 }
 
+void FPSIRecv::DFmap_offline_fake() {
+  auto t = DELTA * 2 + 1;
+  DFMAP_PARAM = DFmapParamTable::getSelectedParam(t);
+
+  // In our implementation, the probability that φ(x) equals 0 is high.
+  u64 φ = 0;
+
+  //   get r_(x,i)
+  r_x_i.resize(PTS_NUM, vector<block>(DIM));
+
+  for (u64 i = 0; i < PTS_NUM; i++) {
+    recv_prng.get(r_x_i[i].data(), DIM);
+  }
+
+  auto opprf_0_num = DFMAP_PARAM.second * DFMAP_PARAM.second * PTS_NUM * DIM;
+  dfmap_opprf_0_keys.reserve(opprf_0_num);
+  dfmap_opprf_0_values.reserve(opprf_0_num);
+
+  padding_blocks(dfmap_opprf_0_keys, opprf_0_num);
+  padding_blocks(dfmap_opprf_0_values, opprf_0_num);
+
+  dfmap_opprf_1_keys.reserve(PTS_NUM * DIM);
+  padding_blocks(dfmap_opprf_1_keys, PTS_NUM * DIM);
+}
+
 void FPSIRecv::DFmap_online() {
   u64 dfmap_opprf_0_other_num;
   coproto::sync_wait(sockets[0].recv(dfmap_opprf_0_other_num));
@@ -106,3 +131,5 @@ void FPSIRecv::DFmap_online() {
   // r_x_i.clear();
   // r_x_i.shrink_to_fit();
 }
+
+void FPSIRecv::cuckoo_hash_fake() {}

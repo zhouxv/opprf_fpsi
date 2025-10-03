@@ -173,8 +173,8 @@ void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   switch (COMP_IDX) {
   case 1: {
     comp_name = "DFmap";
-    sender.DFmap_offline();
-    recv.DFmap_offline();
+    sender.DFmap_offline_fake();
+    recv.DFmap_offline_fake();
 
     for (u64 i = 0; i < TRAIT; i++) {
       // Use std::bind to bind member function and object
@@ -191,7 +191,6 @@ void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
       time_sums[i] = online_time;
       comm_sums[i] =
           socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
-      cout << "comu" << comm_sums[i] << endl;
       recv.clear();
       sender.clear();
     }
