@@ -17,12 +17,12 @@ trap 'cleanup' INT TERM EXIT
 log "Running benchmarks for FuzzyPSI protocol..."
 printf "[ProType] [Metric] [Dim] [Delta] [Size] [Com.(MB)] [Time(s)]\n"
 
-./main -n 8 -d 2 6 10 -delta 10 30 60 120 250 -trait 10 -comp_idx 1 -log 0
+./build/main -n 8 -d 2 6 10 -delta 10 30 60 120 250 -trait 10 -comp_idx 1 -log 0
 
 printf "######################################################\n"
 
-./main -n 12 -d 2 6 10 -delta 10 30 60 120 250 -trait 10 -comp_idx 1 -log 0
+./build/main -n 12 -d 2 6 10 -delta 10 30 60 120 250 -trait 10 -comp_idx 1 -log 0
 
 printf "######################################################\n"
 
-./main -n 16 -d 2 6 10 -delta 10 30 60 120 250 -trait 10 -comp_idx 1 -log 0
+./build/main -n 16 -d 2 6 10 -delta 10 30 60 120 250 -trait 10 -comp_idx 1 -log 0
