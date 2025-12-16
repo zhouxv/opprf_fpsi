@@ -7,7 +7,7 @@
 
 void sample_points(u64 dim, u64 delta, u64 send_size, u64 recv_size,
                    u64 intersection_size, vector<pt> &send_pts,
-                   vector<pt> &recv_pts) {
+                   vector<pt> &recv_pts, bool same) {
   PRNG prng(oc::sysRandomSeed());
 
   for (u64 i = 0; i < send_size; i++) {
@@ -18,22 +18,30 @@ void sample_points(u64 dim, u64 delta, u64 send_size, u64 recv_size,
     }
   }
 
-  for (u64 i = 0; i < recv_size; i++) {
-    for (u64 j = 0; j < dim; j++) {
-      recv_pts[i][j] =
-          (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 3 * delta) +
-          1.5 * delta;
+  if (same) {
+    for (u64 i = 0; i < recv_size; i++) {
+      for (u64 j = 0; j < dim; j++) {
+        recv_pts[i][j] = send_pts[i][j];
+      }
     }
-  }
+  } else {
+    for (u64 i = 0; i < recv_size; i++) {
+      for (u64 j = 0; j < dim; j++) {
+        recv_pts[i][j] =
+            (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 3 * delta) +
+            1.5 * delta;
+      }
+    }
 
-  // u64 base_pos = (prng.get<u64>()) % (send_size - intersection_size - 1);
-  u64 base_pos = 0;
-  for (u64 i = base_pos; i < base_pos + intersection_size; i++) {
-    for (u64 j = 0; j < dim; j++) {
-      send_pts[i][j] = recv_pts[i - base_pos][j];
-    }
-    for (u64 j = 0; j < 1; j++) {
-      send_pts[i][j] += ((i8)((prng.get<u8>()) % (delta - 1)) - delta / 2);
+    // u64 base_pos = (prng.get<u64>()) % (send_size - intersection_size - 1);
+    u64 base_pos = 0;
+    for (u64 i = base_pos; i < base_pos + intersection_size; i++) {
+      for (u64 j = 0; j < dim; j++) {
+        send_pts[i][j] = recv_pts[i - base_pos][j];
+      }
+      for (u64 j = 0; j < 1; j++) {
+        send_pts[i][j] += ((i8)((prng.get<u8>()) % (delta - 1)) - delta / 2);
+      }
     }
   }
 }

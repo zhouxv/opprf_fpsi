@@ -35,11 +35,10 @@ public:
 
   // dFmap protocol
   PrefixParam DFMAP_PARAM;
-  vector<block> dfmap_opprf_0_keys;
-  vector<block> dfmap_opprf_0_values;
-  vector<block> dfmap_opprf_1_keys;
+  vector<block> dfmap_opprf_keys;
+  vector<block> dfmap_opprf_values;
   vector<block> r_x_i;
-  vector<block> ID_xs;
+  vector<block> ID_xr;
 
   u64 psi_ca_result = 0;
 

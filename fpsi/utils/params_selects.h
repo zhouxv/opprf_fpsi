@@ -13,22 +13,45 @@ using namespace oc;
 
 using PrefixParam = std::pair<std::set<u64>, u64>;
 
-class DFmapParamTable {
+class PrefixParamTable {
 public:
   static const map<u64, PrefixParam> &getTable() {
     static once_flag flag;
     static map<u64, PrefixParam> params;
 
     call_once(flag, []() {
-      params[21] = {{0, 1, 2, 3, 4}, 6};
+      // 𝑡=2𝛿+1
+      params[21] = {{0, 1, 2, 3}, 6};
 
-      params[61] = {{0, 1, 2, 3, 4, 5}, 9};
+      params[61] = {{0, 1, 2, 3, 4}, 9};
 
-      params[121] = {{0, 1, 2, 3, 4, 5, 6}, 10};
+      params[121] = {{0, 1, 2, 3, 4, 5}, 10};
 
-      params[241] = {{0, 1, 2, 3, 4, 5, 6, 7}, 12};
+      params[241] = {{0, 1, 2, 3, 5, 6}, 12};
 
-      params[501] = {{0, 1, 2, 3, 4, 5, 6, 7, 8}, 14};
+      params[501] = {{0, 1, 2, 4, 5, 6}, 17};
+
+      // 𝑡=𝛿
+      params[10] = {{0, 1}, 6};
+
+      params[30] = {{0, 1, 2, 3}, 8};
+
+      params[60] = {{0, 2, 3, 4}, 9};
+
+      params[120] = {{0, 3, 4, 5}, 13};
+
+      params[250] = {{0, 2, 4, 6}, 21};
+
+      // 𝑡=𝛿+1
+      params[11] = {{0, 2}, 4};
+
+      params[31] = {{0, 1, 2, 3}, 4};
+
+      params[61] = {{0, 2, 3, 4}, 11};
+
+      params[121] = {{0, 2, 4, 5}, 14};
+
+      params[251] = {{0, 2, 4, 6}, 17};
     });
 
     return params;

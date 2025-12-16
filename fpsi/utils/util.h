@@ -14,7 +14,7 @@
 // Sampling with specified intersection size
 void sample_points(u64 dim, u64 delta, u64 sender_size, u64 recv_size,
                    u64 intersection_size, vector<pt> &sender_pts,
-                   vector<pt> &recv_pts);
+                   vector<pt> &recv_pts, bool same = false);
 
 // Helper functions required for spatial hashing
 pt cell(const pt &p, u64 dim, u64 side_len);
@@ -46,14 +46,15 @@ struct Monty25519Hash {
 
 vector<u64> get_phi_dim_optimized(const vector<pt> &pts, u64 delta);
 
-inline block get_value_fmap_opprf(u64 i, string prefix, u64 j, string prefix2) {
+inline block get_fmap_opprf_key(u64 i_star, u64 x_i_star_s1, u64 i,
+                                u64 x_i_s2) {
   blake3_hasher hasher;
   block hash_out;
   blake3_hasher_init(&hasher);
+  blake3_hasher_update(&hasher, &i_star, sizeof(i_star));
+  blake3_hasher_update(&hasher, &x_i_star_s1, sizeof(x_i_star_s1));
   blake3_hasher_update(&hasher, &i, sizeof(i));
-  blake3_hasher_update(&hasher, prefix.data(), prefix.size());
-  blake3_hasher_update(&hasher, &j, sizeof(j));
-  blake3_hasher_update(&hasher, prefix2.data(), prefix2.size());
+  blake3_hasher_update(&hasher, &x_i_s2, sizeof(x_i_s2));
 
   blake3_hasher_finalize(&hasher, hash_out.data(), 16);
 

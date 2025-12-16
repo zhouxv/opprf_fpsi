@@ -33,9 +33,7 @@ public:
 
   // dFmap protocol
   PrefixParam DFMAP_PARAM;
-  vector<block> dfmap_opprf_0_keys;
-  vector<block> dfmap_opprf_1_vals;
-  vector<block> t_y_i;
+  vector<block> t_y_j;
   vector<block> ID_ys;
 
   void clear() {

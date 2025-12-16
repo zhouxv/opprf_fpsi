@@ -5,6 +5,7 @@
 #include "pis_new/batch_psm.h"
 #include "utils/params_selects.h"
 #include "utils/set_dec.h"
+#include "utils/util.h"
 
 #include <cmath>
 #include <cryptoTools/Common/CuckooIndex.h>
@@ -20,68 +21,49 @@
 
 void FPSISender::DFmap_fig8_offline() {
   auto t = DELTA * 2 + 1;
-  DFMAP_PARAM = DFmapParamTable::getSelectedParam(t);
-
-  //   get r_(x,i)
-  t_y_i.resize(PTS_NUM * DIM);
-
-  sender_prng.get(t_y_i.data(), PTS_NUM * DIM);
+  DFMAP_PARAM = PrefixParamTable::getSelectedParam(t);
 
   // In our implementation, the probability that φ(x) equals 0 is high.
   u64 φ = 0;
 
-  vector<vector<vector<string>>> prefixs(PTS_NUM, vector<vector<string>>(DIM));
+  // Compute block_4delta
+  vector<u64> block_4delta(PTS_NUM * DIM);
   for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
     for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
-      prefixs[pt_idx][dim_idx] =
-          set_prefix(pts[pt_idx][dim_idx], DFMAP_PARAM.first);
+      block_4delta[pt_idx * DIM + dim_idx] =
+          (pts[pt_idx][dim_idx] - DELTA) / SIDE_LEN;
     }
   }
 
-  auto opprf_num =
-      DFMAP_PARAM.first.size() * DFMAP_PARAM.first.size() * PTS_NUM * DIM;
-  dfmap_opprf_0_keys.reserve(opprf_num);
-  dfmap_opprf_1_vals.reserve(opprf_num);
-
+  // Compute t_y_j
+  t_y_j.resize(PTS_NUM * DIM);
   for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
     for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
-      for (auto x : prefixs[pt_idx][φ]) {
-        for (auto y : prefixs[pt_idx][dim_idx]) {
-          auto temp = get_value_fmap_opprf(dim_idx, y, φ, x);
-          dfmap_opprf_0_keys.push_back(temp);
-          dfmap_opprf_1_vals.push_back(t_y_i[pt_idx * DIM + dim_idx]);
-        }
-      }
+      t_y_j[pt_idx * DIM + dim_idx] =
+          get_fmap_opprf_key(dim_idx, block_4delta[pt_idx * DIM + dim_idx], φ,
+                             block_4delta[pt_idx * DIM + φ]);
     }
   }
-  spdlog::debug("[Sender] opprf_num: {}, dfmap_opprf_0_keys size: {}",
-                opprf_num, dfmap_opprf_0_keys.size());
 }
 
 void FPSISender::DFmap_fig8_online() {
-
-  u64 dfmap_opprf_0_other_num;
-  coproto::sync_wait(sockets[0].send(dfmap_opprf_0_keys.size()));
-  coproto::sync_wait(sockets[0].recv(dfmap_opprf_0_other_num));
+  u64 opprf_size_other;
+  u64 opprf_size = t_y_j.size();
+  coproto::sync_wait(sockets[0].recv(opprf_size_other));
+  coproto::sync_wait(sockets[0].send(opprf_size));
 
   volePSI::RsOpprfReceiver recv;
-  volePSI::RsOpprfSender sender;
+  vector<block> opprf_values(opprf_size);
 
-  vector<block> dfmap_opprf_0_values(dfmap_opprf_0_keys.size());
+  coproto::sync_wait(recv.receive(opprf_size_other, t_y_j, opprf_values,
+                                  sender_prng, 1, sockets[0]));
 
-  coproto::sync_wait(recv.receive(dfmap_opprf_0_other_num, dfmap_opprf_0_keys,
-                                  dfmap_opprf_0_values, sender_prng, 1,
-                                  sockets[0]));
-
-  u64 dfmap_opprf_1_other_num;
-  coproto::sync_wait(sockets[0].recv(dfmap_opprf_1_other_num));
-  coproto::sync_wait(sockets[0].send(dfmap_opprf_0_values.size()));
-
-  coproto::sync_wait(sender.send(dfmap_opprf_1_other_num, dfmap_opprf_0_values,
-                                 dfmap_opprf_1_vals, sender_prng, 1,
-                                 sockets[0]));
-
-  ID_ys = t_y_i;
+  ID_ys.resize(PTS_NUM, ZeroBlock);
+  for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
+    for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
+      ID_ys[pt_idx] = ID_ys[pt_idx] ^ opprf_values[pt_idx * DIM + dim_idx];
+    }
+  }
 
   // dfmap_opprf_0_keys.clear();
   // dfmap_opprf_0_keys.shrink_to_fit();
@@ -91,5 +73,5 @@ void FPSISender::DFmap_fig8_online() {
   // t_y_i.shrink_to_fit();
 }
 
-void DFmap_fig9_offline() {}
-void DFmap_fig9_online() {}
+void FPSISender::DFmap_fig9_offline() {}
+void FPSISender::DFmap_fig9_online() {}

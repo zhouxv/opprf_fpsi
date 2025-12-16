@@ -8,20 +8,25 @@
 #include <cryptoTools/Common/CLP.h>
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Crypto/PRNG.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h> // 包含这个以支持流输出
 #include <ipcl/ipcl.hpp>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 #include <string>
+
+#define FMT_DEPRECATED_OSTREAM
 
 enum class Role {
   Recv,  // receiver
   Sender // sender
 };
 
-void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
-                      const u64 DELTA, const u64 INTERSECTION_SIZE,
-                      const u64 TRAIT, const string IP, const u64 PORT,
-                      const u64 COMP_IDX);
+void run_fmap_protocol(const CLP &cmd);
+void run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
+                       const u64 DELTA, const u64 INTERSECTION_SIZE,
+                       const u64 TRAIT, const string IP, const u64 PORT,
+                       const bool COMP_IDX, const bool PTS_SAME);
 
 int main(int argc, char **argv) {
   CLP cmd;
@@ -75,8 +80,23 @@ int main(int argc, char **argv) {
     return 0;
   }
 
+  if (cmd.isSet("p")) {
+    const u64 protocol_type = cmd.getOr("p", 1);
+    switch (protocol_type) {
+    case 1:
+      run_fmap_protocol(cmd);
+      break;
+    default:
+      spdlog::error("Unknown protocol type", protocol_type);
+    }
+  }
+
+  return 0;
+}
+
+void run_fmap_protocol(const CLP &cmd) {
   /*
-  run fpsi protocol
+  run fmap protocol
   */
   // obtain protocol parameters
   const vector<u64> nums = cmd.getManyOr<u64>("n", {8});
@@ -87,29 +107,28 @@ int main(int argc, char **argv) {
   const u64 trait = cmd.getOr("trait", 3);
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
-  const u64 comp_idx = cmd.getOr<u64>("comp_idx", 1);
+  const bool fm_old = cmd.isSet("fm_old");
+  const bool pts_same = cmd.isSet("same");
 
-  // run fpsi protocol
+  // run fmap protocol
   for (auto num : nums) { // set size
     auto set_size = 1 << num;
     for (auto dim : dims) {         // d
       for (auto metric : metrics) { // p
         for (auto delta : deltas) { // delta
-          run_psi_protocol(set_size, dim, metric, delta, intersection_size,
-                           trait, ip, port, comp_idx);
+          run_fmap_protocol(set_size, dim, metric, delta, intersection_size,
+                            trait, ip, port, fm_old, pts_same);
         }
         std::cout << std::endl;
       }
     }
   }
-
-  return 0;
 }
 
-void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
-                      const u64 DELTA, const u64 INTERSECTION_SIZE,
-                      const u64 TRAIT, const string IP, const u64 PORT,
-                      const u64 COMP_IDX) {
+void run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
+                       const u64 DELTA, const u64 INTERSECTION_SIZE,
+                       const u64 TRAIT, const string IP, const u64 PORT,
+                       const bool FM_OLD, const bool PTS_SAME) {
 
   if (INTERSECTION_SIZE > PT_NUM) {
     spdlog::error("intersection_size should not be greater than set_size");
@@ -123,14 +142,14 @@ void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   spdlog::info("delta             : {} ", DELTA);
   spdlog::info("intersection_size : {}", INTERSECTION_SIZE);
   spdlog::info("trait             : {}", TRAIT);
-  spdlog::info("COMP_IDX          : {}", COMP_IDX);
+  spdlog::info("fmap_old          : {}", FM_OLD);
+  spdlog::info("pts_same          : {}", PTS_SAME);
 
   // Paillier keys initialization
   ipcl::initializeContext("QAT");
   ipcl::KeyPair paillier_key = ipcl::generateKeypair(2048, true);
   ipcl::terminateContext();
-
-  spdlog::info("Both parties point set sampling finished");
+  spdlog::info("Paillier keys initialization finished");
 
   // Network communication initialization
   vector<coproto::Socket> socketPair0, socketPair1;
@@ -152,14 +171,16 @@ void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   recv_socks.join();
   sender_socks.join();
 
-  spdlog::info("Network communication initialization");
+  spdlog::info("Network communication initialization finished");
 
   // Both parties point set sampling
   vector<pt> recv_pts(PT_NUM, vector<u64>(DIM, 0));
   vector<pt> send_pts(PT_NUM, vector<u64>(DIM, 0));
 
   sample_points(DIM, DELTA, PT_NUM, PT_NUM, INTERSECTION_SIZE, send_pts,
-                recv_pts);
+                recv_pts, PTS_SAME);
+
+  spdlog::info("Both parties point set sampling finished");
 
   FPSIRecv recv(DIM, DELTA, PT_NUM, METRIC, 1, recv_pts, paillier_key.pub_key,
                 paillier_key.priv_key, socketPair0);
@@ -168,99 +189,48 @@ void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   vector<double> time_sums(TRAIT, 0);
   vector<double> comm_sums(TRAIT, 0.0);
 
-  string comp_name;
+  if (FM_OLD) {
+    sender.DFmap_fig8_offline();
+    recv.DFmap_fig8_offline();
+  } else {
+    sender.DFmap_fig9_offline();
+    recv.DFmap_fig9_offline();
+  }
 
-  switch (COMP_IDX) {
-  case 1: {
-    comp_name = "DFmap";
-    sender.DFmap_offline_fake();
-    recv.DFmap_offline_fake();
+  spdlog::info("Fmap Offline phase finished");
 
-    for (u64 i = 0; i < TRAIT; i++) {
-      // Use std::bind to bind member function and object
-      simpleTimer timer;
+  for (u64 i = 0; i < TRAIT; i++) {
+    // Use std::bind to bind member function and object
+    simpleTimer timer;
 
-      timer.start();
-      std::thread recv_msg(std::bind(&FPSIRecv::DFmap_online, &recv));
-      std::thread send_msg(std::bind(&FPSISender::DFmap_online, &sender));
+    timer.start();
+
+    if (FM_OLD) {
+      std::thread recv_msg(std::bind(&FPSIRecv::DFmap_fig8_online, &recv));
+      std::thread send_msg(std::bind(&FPSISender::DFmap_fig8_online, &sender));
       recv_msg.join();
       send_msg.join();
-      timer.end("protocol_online");
-
-      auto online_time = timer.get_by_key("protocol_online");
-      time_sums[i] = online_time;
-      comm_sums[i] =
-          socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
-      recv.clear();
-      sender.clear();
-    }
-  }; break;
-  case 2: {
-    comp_name = "Hash";
-
-    for (u64 i = 0; i < TRAIT; i++) {
-      // Use std::bind to bind member function and object
-      simpleTimer timer;
-
-      timer.start();
-      std::thread recv_msg(std::bind(&FPSIRecv::cuckoo_hash_fake, &recv));
-      std::thread send_msg(std::bind(&FPSISender::simple_hash_fake, &sender));
+    } else {
+      std::thread recv_msg(std::bind(&FPSIRecv::DFmap_fig9_online, &recv));
+      std::thread send_msg(std::bind(&FPSISender::DFmap_fig9_online, &sender));
       recv_msg.join();
       send_msg.join();
-      timer.end("protocol_online");
-
-      auto online_time = timer.get_by_key("protocol_online");
-      time_sums[i] = online_time;
-      comm_sums[i] =
-          socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
-      recv.clear();
-      sender.clear();
     }
-  }; break;
-  case 3: {
-    comp_name = "ssFmatLinf";
 
-    for (u64 i = 0; i < TRAIT; i++) {
-      // Use std::bind to bind member function and object
-      simpleTimer timer;
+    spdlog::info("Fmap Online phase finished");
 
-      timer.start();
-      std::thread recv_msg(std::bind(&FPSIRecv::ssFmatLinf, &recv));
-      std::thread send_msg(std::bind(&FPSISender::ssFmatLinf, &sender));
-      recv_msg.join();
-      send_msg.join();
-      timer.end("protocol_online");
+    timer.end("protocol_online");
 
-      auto online_time = timer.get_by_key("protocol_online");
-      time_sums[i] = online_time;
-      comm_sums[i] =
-          socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
-      recv.clear();
-      sender.clear();
+    auto online_time = timer.get_by_key("protocol_online");
+    time_sums[i] = online_time;
+    comm_sums[i] = socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
+
+    for (u64 i = 0; i < 10; i++) {
+      spdlog::debug("ID[{}] {} {}", i, recv.ID_xr[i], sender.ID_ys[i]);
     }
-  }; break;
-  case 4: {
-    comp_name = "ssFmatLp";
 
-    for (u64 i = 0; i < TRAIT; i++) {
-      // Use std::bind to bind member function and object
-      simpleTimer timer;
-
-      timer.start();
-      std::thread recv_msg(std::bind(&FPSIRecv::ssFmatLp, &recv));
-      std::thread send_msg(std::bind(&FPSISender::ssFmatLp, &sender));
-      recv_msg.join();
-      send_msg.join();
-      timer.end("protocol_online");
-
-      auto online_time = timer.get_by_key("protocol_online");
-      time_sums[i] = online_time;
-      comm_sums[i] =
-          socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
-      recv.clear();
-      sender.clear();
-    }
-  }; break;
+    recv.clear();
+    sender.clear();
   }
 
   double avg_online_time =
@@ -269,15 +239,15 @@ void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   double avg_com = accumulate(comm_sums.begin(), comm_sums.end(), 0.0) /
                    1024.0 / 1024.0 / TRAIT;
 
-  if (METRIC == 0) {
-    cout << std::format("[{}]  {:^5}  𝐿∞  {:^5}  {:^5}  {:^10.3f}  {:^10.3f}",
-                        comp_name, PT_NUM, DIM, DELTA, avg_online_time, avg_com)
+  if (FM_OLD) {
+    cout << std::format(
+                "[fig8_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  {:^10.3f}  {:^10.3f}",
+                PT_NUM, METRIC, DIM, DELTA, avg_online_time, avg_com)
          << endl;
-
   } else {
-    cout << std::format("[{}]  𝐿{}  {:^5}  {:^5}  {:^5}  {:^10.3f}  {:^10.3f}",
-                        comp_name, PT_NUM, DIM, METRIC, DELTA, avg_online_time,
-                        avg_com)
+    cout << std::format(
+                "[fig9_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  {:^10.3f}  {:^10.3f}",
+                PT_NUM, METRIC, DIM, DELTA, avg_online_time, avg_com)
          << endl;
   }
 
