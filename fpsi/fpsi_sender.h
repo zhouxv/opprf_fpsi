@@ -58,13 +58,9 @@ public:
     sender_prng.SetSeed(oc::sysRandomSeed());
   };
 
-  void DFmap_offline();
-  void DFmap_offline_fake();
-  void DFmap_online();
+  void DFmap_fig8_offline();
+  void DFmap_fig8_online();
 
-  void simple_hash_fake();
-
-  void ssFmatLinf();
-
-  void ssFmatLp();
+  void DFmap_fig9_offline();
+  void DFmap_fig9_online();
 };

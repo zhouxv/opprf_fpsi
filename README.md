@@ -1,7 +1,7 @@
 ## run docker
 
 ```bash
-docker build -t opprf_fpsi:latest .
+sudo docker build -t opprf_fpsi:latest .
 
 # docker tag opprf_fpsi:latest blueobsidian/opprf_fpsi:latest
 # docker push blueobsidian/opprf_fpsi:latest
