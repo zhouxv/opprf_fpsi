@@ -58,12 +58,7 @@ void FPSISender::DFmap_fig8_online() {
   coproto::sync_wait(recv.receive(opprf_size_other, t_y_j, opprf_values,
                                   sender_prng, 1, sockets[0]));
 
-  ID_ys.resize(PTS_NUM, ZeroBlock);
-  for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
-    for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
-      ID_ys[pt_idx] = ID_ys[pt_idx] ^ opprf_values[pt_idx * DIM + dim_idx];
-    }
-  }
+  ID_ys = opprf_values;
 
   // dfmap_opprf_0_keys.clear();
   // dfmap_opprf_0_keys.shrink_to_fit();

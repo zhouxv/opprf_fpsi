@@ -225,8 +225,12 @@ void run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     time_sums[i] = online_time;
     comm_sums[i] = socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
 
-    for (u64 i = 0; i < 10; i++) {
-      spdlog::debug("ID[{}] {} {}", i, recv.ID_xr[i], sender.ID_ys[i]);
+    for (u64 i = 0; i < 3; i++) {
+      for (u64 d = 0; d < DIM; d++) {
+        cout << fmt::format("ID[{}] {} {}", i, recv.ID_xr[i * DIM + d],
+                            sender.ID_ys[i * DIM + d])
+             << endl;
+      }
     }
 
     recv.clear();

@@ -1,8 +1,5 @@
 #include "fpsi_recv.h"
-#include "config.h"
 #include "opprf/Opprf.h"
-#include "pis_new/batch_psm.h"
-#include "utils/set_dec.h"
 #include "utils/util.h"
 
 #include <cryptoTools/Common/BitVector.h>
@@ -15,7 +12,6 @@
 #include <ipcl/plaintext.hpp>
 #include <ipcl/utils/context.hpp>
 #include <spdlog/spdlog.h>
-#include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -30,16 +26,17 @@ void FPSIRecv::DFmap_fig8_offline() {
   // Generate r_x_i
   r_x_i.resize(PTS_NUM * DIM);
   recv_prng.get(r_x_i.data(), PTS_NUM * DIM);
+  ID_xr = r_x_i;
 
-  // Generate x_i_s and ID_xr
+  // Generate x_i_s
   vector<pair<u64, u64>> x_i_s(PTS_NUM * DIM);
-  ID_xr.resize(PTS_NUM, ZeroBlock);
+
   for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
     for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
-      ID_xr[pt_idx] = ID_xr[pt_idx] ^ r_x_i[pt_idx * DIM + dim_idx];
 
       u64 temp0 = (pts[pt_idx][dim_idx] - DELTA) / SIDE_LEN;
       u64 temp1 = pts[pt_idx][dim_idx] / SIDE_LEN;
+
       x_i_s[pt_idx * DIM + dim_idx] = make_pair(temp0, temp1);
     }
   }

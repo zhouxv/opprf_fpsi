@@ -1,5 +1,4 @@
 #include "set_dec.h"
-#include "utils/params_selects.h"
 #include <bitset>
 #include <cmath>
 #include <stdexcept>
