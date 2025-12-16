@@ -38,8 +38,8 @@ public:
   vector<block> dfmap_opprf_0_keys;
   vector<block> dfmap_opprf_0_values;
   vector<block> dfmap_opprf_1_keys;
-  vector<vector<block>> r_x_i;
-  vector<vector<block>> ID_xs;
+  vector<block> r_x_i;
+  vector<block> ID_xs;
 
   u64 psi_ca_result = 0;
 
@@ -72,4 +72,8 @@ public:
   void DFmap_online();
 
   void cuckoo_hash_fake();
+
+  void ssFmatLinf();
+
+  void ssFmatLp();
 };

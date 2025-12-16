@@ -1,9 +1,13 @@
 #include "fpsi_sender.h"
+#include "config.h"
 #include "opprf/Opprf.h"
+#include "opprf/SimpleIndex.h"
+#include "pis_new/batch_psm.h"
 #include "utils/params_selects.h"
 #include "utils/set_dec.h"
 
 #include <cmath>
+#include <cryptoTools/Common/CuckooIndex.h>
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/PRNG.h>
@@ -19,11 +23,9 @@ void FPSISender::DFmap_offline() {
   DFMAP_PARAM = DFmapParamTable::getSelectedParam(t);
 
   //   get r_(x,i)
-  t_y_i.resize(PTS_NUM, vector<block>(DIM));
+  t_y_i.resize(PTS_NUM * DIM);
 
-  for (u64 i = 0; i < PTS_NUM; i++) {
-    sender_prng.get(t_y_i[i].data(), DIM);
-  }
+  sender_prng.get(t_y_i.data(), PTS_NUM * DIM);
 
   // In our implementation, the probability that φ(x) equals 0 is high.
   u64 φ = 0;
@@ -47,7 +49,7 @@ void FPSISender::DFmap_offline() {
         for (auto y : prefixs[pt_idx][dim_idx]) {
           auto temp = get_value_fmap_opprf(dim_idx, y, φ, x);
           dfmap_opprf_0_keys.push_back(temp);
-          dfmap_opprf_1_vals.push_back(t_y_i[pt_idx][dim_idx]);
+          dfmap_opprf_1_vals.push_back(t_y_i[pt_idx * DIM + dim_idx]);
         }
       }
     }
@@ -61,11 +63,8 @@ void FPSISender::DFmap_offline_fake() {
   DFMAP_PARAM = DFmapParamTable::getSelectedParam(t);
 
   //   get r_(x,i)
-  t_y_i.resize(PTS_NUM, vector<block>(DIM));
-
-  for (u64 i = 0; i < PTS_NUM; i++) {
-    sender_prng.get(t_y_i[i].data(), DIM);
-  }
+  t_y_i.resize(PTS_NUM * DIM);
+  sender_prng.get(t_y_i.data(), PTS_NUM * DIM);
 
   // In our implementation, the probability that φ(x) equals 0 is high.
   u64 φ = 0;
@@ -112,4 +111,93 @@ void FPSISender::DFmap_online() {
   // t_y_i.shrink_to_fit();
 }
 
-void FPSISender::simple_hash_fake() {}
+void FPSISender::simple_hash_fake() {
+  ID_ys.resize(PTS_NUM * DIM);
+  sender_prng.get(ID_ys.data(), PTS_NUM * DIM);
+
+  auto params =
+      CuckooIndex<NotThreadSafe>::selectParams(PTS_NUM * DIM, 40, 0, 3);
+
+  auto bins_size = params.numBins();
+
+  spdlog::debug("[Sender] bins_size: {}", bins_size);
+
+  volePSI::SimpleIndex simple_index;
+  simple_index.init(bins_size, PTS_NUM * DIM, 40, 3);
+
+  simple_index.insertItems(ID_ys, CUCKOO_SEED);
+}
+
+void FPSISender::ssFmatLinf() {
+  auto t = DELTA * 2 + 1;
+  DFMAP_PARAM = DFmapParamTable::getSelectedParam(t);
+
+  auto params =
+      CuckooIndex<NotThreadSafe>::selectParams(PTS_NUM * DIM, 40, 0, 3);
+  auto bins_size = params.numBins();
+
+  volePSI::SimpleIndex simple_index;
+  simple_index.init(bins_size, PTS_NUM * DIM, 40, 3);
+  auto max_b = simple_index.mMaxBinSize;
+
+  auto count = bins_size * DIM * DFMAP_PARAM.first.size();
+
+  vector<block> list(count);
+
+  vector<block> res(count);
+
+  sender_prng.get(list.data(), count);
+
+  volePSI::RsOpprfReceiver recv;
+
+  u64 opprf_0_other_num;
+  coproto::sync_wait(sockets[0].recv(opprf_0_other_num));
+  coproto::sync_wait(sockets[0].send(count));
+
+  spdlog::debug("[Sender] opprf_0: {} {} {} {}", opprf_0_other_num, count,
+                list.size(), res.size());
+  coproto::sync_wait(
+      recv.receive(opprf_0_other_num, list, res, sender_prng, 1, sockets[0]));
+
+  volePSI::RsOpprfSender sender;
+  vector<block> blks(res.size());
+  sender_prng.get(blks.data(), res.size());
+
+  u64 opprf_1_other_num;
+  coproto::sync_wait(sockets[0].recv(opprf_1_other_num));
+  coproto::sync_wait(sockets[0].send(res.size()));
+
+  spdlog::debug("[Sender] opprf_1: {} {} {} {}", res.size(), opprf_1_other_num,
+                res.size(), blks.size());
+
+  sender_prng.get(res.data(), res.size());
+  sender_prng.get(res.data(), blks.size());
+  coproto::sync_wait(
+      sender.send(opprf_1_other_num, res, blks, sender_prng, 1, sockets[0]));
+
+  vector<u64> plain_nums(opprf_1_other_num);
+  sender_prng.get(plain_nums.data(), opprf_1_other_num);
+
+  auto r = Batch_PSM_send(plain_nums, 1, sockets[0]);
+  auto rr = sync_wait(r);
+
+  spdlog::debug("[sender] {} {}", opprf_1_other_num, bins_size);
+  spdlog::debug("[sender] Batch_PSM_send");
+
+  // vector<u64> plain_nums2(bins_size);
+  // sender_prng.get(plain_nums2.data(), bins_size);
+
+  // auto r2 = Batch_PSM_send(plain_nums2, 1, sockets[0]);
+  // auto rr2 = sync_wait(r);
+  // spdlog::debug("[sender] Batch_PSM_send");
+}
+
+void FPSISender::ssFmatLp() {
+  auto params =
+      CuckooIndex<NotThreadSafe>::selectParams(PTS_NUM * DIM, 40, 0, 3);
+  auto bins_size = params.numBins();
+  volePSI::SimpleIndex simple_index;
+  simple_index.init(bins_size, PTS_NUM * DIM, 40, 3);
+
+  auto max_b = simple_index.mMaxBinSize;
+}

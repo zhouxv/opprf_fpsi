@@ -83,7 +83,8 @@ void test_opprf(const oc::CLP &cmd) {
   prng0.get(vals.data(), n);
   prng0.get(out.data(), n);
 
-  std::vector<block> vals_2(vals.begin(), vals.begin() + n / 2);
+  std::vector<block> vals_2(2 * n);
+  prng1.get(vals_2.data(), 2 * n);
   std::vector<block> recvOut(vals_2.size());
 
   auto p0 = sender.send(vals_2.size(), vals, out, prng0, 1, sockets[0]);

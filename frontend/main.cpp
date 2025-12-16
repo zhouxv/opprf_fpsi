@@ -196,6 +196,70 @@ void run_psi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     }
   }; break;
   case 2: {
+    comp_name = "Hash";
+
+    for (u64 i = 0; i < TRAIT; i++) {
+      // Use std::bind to bind member function and object
+      simpleTimer timer;
+
+      timer.start();
+      std::thread recv_msg(std::bind(&FPSIRecv::cuckoo_hash_fake, &recv));
+      std::thread send_msg(std::bind(&FPSISender::simple_hash_fake, &sender));
+      recv_msg.join();
+      send_msg.join();
+      timer.end("protocol_online");
+
+      auto online_time = timer.get_by_key("protocol_online");
+      time_sums[i] = online_time;
+      comm_sums[i] =
+          socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
+      recv.clear();
+      sender.clear();
+    }
+  }; break;
+  case 3: {
+    comp_name = "ssFmatLinf";
+
+    for (u64 i = 0; i < TRAIT; i++) {
+      // Use std::bind to bind member function and object
+      simpleTimer timer;
+
+      timer.start();
+      std::thread recv_msg(std::bind(&FPSIRecv::ssFmatLinf, &recv));
+      std::thread send_msg(std::bind(&FPSISender::ssFmatLinf, &sender));
+      recv_msg.join();
+      send_msg.join();
+      timer.end("protocol_online");
+
+      auto online_time = timer.get_by_key("protocol_online");
+      time_sums[i] = online_time;
+      comm_sums[i] =
+          socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
+      recv.clear();
+      sender.clear();
+    }
+  }; break;
+  case 4: {
+    comp_name = "ssFmatLp";
+
+    for (u64 i = 0; i < TRAIT; i++) {
+      // Use std::bind to bind member function and object
+      simpleTimer timer;
+
+      timer.start();
+      std::thread recv_msg(std::bind(&FPSIRecv::ssFmatLp, &recv));
+      std::thread send_msg(std::bind(&FPSISender::ssFmatLp, &sender));
+      recv_msg.join();
+      send_msg.join();
+      timer.end("protocol_online");
+
+      auto online_time = timer.get_by_key("protocol_online");
+      time_sums[i] = online_time;
+      comm_sums[i] =
+          socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
+      recv.clear();
+      sender.clear();
+    }
   }; break;
   }
 

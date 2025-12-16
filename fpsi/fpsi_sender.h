@@ -35,8 +35,8 @@ public:
   PrefixParam DFMAP_PARAM;
   vector<block> dfmap_opprf_0_keys;
   vector<block> dfmap_opprf_1_vals;
-  vector<vector<block>> t_y_i;
-  vector<vector<block>> ID_ys;
+  vector<block> t_y_i;
+  vector<block> ID_ys;
 
   void clear() {
     for (auto socket : sockets) {
@@ -63,4 +63,8 @@ public:
   void DFmap_online();
 
   void simple_hash_fake();
+
+  void ssFmatLinf();
+
+  void ssFmatLp();
 };
