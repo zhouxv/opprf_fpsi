@@ -11,9 +11,9 @@ install_libOTe(){
     cd libOTe
     git checkout a403ec37c6a32148648b7d8fd66dc35318d9f99d
 
-    mkdir -p ./out && cd ./out
-    wget https://sourceforge.net/projects/boost/files/boost/1.86.0/boost_1_86_0.tar.bz2
-    cd ..
+    # mkdir -p ./out && cd ./out
+    # wget https://sourceforge.net/projects/boost/files/boost/1.86.0/boost_1_86_0.tar.bz2
+    # cd ..
 
     printf "################## Building libOTe             ###################\n\n"
     python3 build.py --all --boost --sodium 

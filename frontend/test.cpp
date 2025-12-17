@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "opprf/Opprf.h"
+#include "utils/simpleTimer.h"
 #include "utils/util.h"
 
 #include <coproto/Socket/LocalAsyncSock.h>
@@ -10,9 +11,14 @@
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/PRNG.h>
+
 #include <macoro/task.h>
 #include <spdlog/spdlog.h>
 #include <vector>
+
+#include <ipcl/ipcl.hpp>
+#include <ipcl/pri_key.hpp>
+#include <ipcl/pub_key.hpp>
 
 inline auto eval(macoro::task<> &t0, macoro::task<> &t1) {
   auto r =
@@ -143,4 +149,63 @@ void test_get_phi(const oc::CLP &cmd) {
       count++;
   }
   cout << "count: " << count << endl;
+}
+
+void test_pailliar(const oc::CLP &cmd) {
+  ipcl::initializeContext("QAT");
+  ipcl::setHybridMode(ipcl::HybridMode::OPTIMAL);
+  ipcl::KeyPair paillier_key = ipcl::generateKeypair(2048, true);
+  auto pk = paillier_key.pub_key;
+  auto sk = paillier_key.priv_key;
+
+  u64 count = cmd.getOr("n", 10000);
+
+  // Generate random values and zero values
+  vector<u64> zero_values(count, 0);
+  vector<u64> random_values(count, 0);
+  vector<BigNumber> random_bns(count, 0);
+  vector<BigNumber> zero_bns(count, 0);
+
+  PRNG prng(oc::sysRandomSeed());
+  prng.get(random_values.data(), random_values.size());
+
+  for (u64 i = 0; i < count; i++) {
+    random_bns[i] = BigNumber(reinterpret_cast<Ipp32u *>(&random_values[i]), 2);
+    zero_bns[i] = BigNumber(reinterpret_cast<Ipp32u *>(&zero_values[i]), 2);
+  }
+
+  tVar timer;
+
+  tStart(timer);
+  ipcl::PlainText pt_randoms = ipcl::PlainText(random_bns);
+  ipcl::PlainText pt_zero = ipcl::PlainText(zero_bns);
+  auto t1 = tEnd(timer);
+
+  tStart(timer);
+  ipcl::CipherText random_ciphers = pk.encrypt(pt_randoms);
+  auto t2 = tEnd(timer);
+
+  tStart(timer);
+  ipcl::CipherText zero_ciphers = pk.encrypt(pt_zero);
+  auto t3 = tEnd(timer);
+
+  tStart(timer);
+  auto add_res = random_ciphers + zero_ciphers;
+  auto t4 = tEnd(timer);
+
+  tStart(timer);
+  ipcl::PlainText dt_add_ctx_cty = sk.decrypt(add_res);
+  auto t5 = tEnd(timer);
+
+  spdlog::info("Paillier Encryption Test Results:");
+  spdlog::info("Plaintext Encoding Time: {} ms", t1);
+  spdlog::info("Random Values Encryption Time: {} ms", t2);
+  spdlog::info("Zero Values Encryption Time: {} ms", t3);
+  spdlog::info("Ciphertext Addition Time: {} ms", t4);
+  spdlog::info("Decryption Time: {} ms", t5);
+
+  auto commu = add_res.getTexts().size() * 2048 / 8 / 1024;
+  spdlog::info("Communication for {} additions: {} KB", count, commu);
+
+  ipcl::terminateContext();
 }

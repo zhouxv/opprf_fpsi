@@ -52,7 +52,7 @@ RUN chmod +x ./*.sh && \
     ./shell_build_cmd.sh
 
 COPY ./README.md ./
-COPY ./shell_run_bench.sh ./shell_run_bench.sh
+COPY ./shell_run_bench_fmap.sh ./shell_run_bench_fmap.sh
 
-RUN chmod +x ./shell_run_bench.sh
+RUN chmod +x ./*.sh
 

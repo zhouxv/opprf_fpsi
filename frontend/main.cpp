@@ -74,6 +74,9 @@ int main(int argc, char **argv) {
     case 3:
       test_get_phi(cmd);
       break;
+    case 4:
+      test_pailliar(cmd);
+      break;
     default:
       spdlog::error("Unknown test type", test_type);
     }
@@ -224,14 +227,6 @@ void run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     auto online_time = timer.get_by_key("protocol_online");
     time_sums[i] = online_time;
     comm_sums[i] = socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
-
-    for (u64 i = 0; i < 3; i++) {
-      for (u64 d = 0; d < DIM; d++) {
-        cout << fmt::format("ID[{}] {} {}", i, recv.ID_xr[i * DIM + d],
-                            sender.ID_ys[i * DIM + d])
-             << endl;
-      }
-    }
 
     recv.clear();
     sender.clear();
