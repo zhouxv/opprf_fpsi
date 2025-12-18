@@ -13,6 +13,8 @@ cleanup() {
 # Register Signal Capture
 trap 'cleanup' INT TERM EXIT
 
-printf "[ProType] [Metric] [Dim] [Delta] [Size] [Time(s)] [Com.(MB)]\n"
+printf "[ProType] [Size] [Metric] [Dim] [Delta] [Time(s)] [Com.(MB)]\n"
 
-./build/main -p 1 -n 8 12 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 3 -log 0 -fm_old
+./build/main -p 1 -n 8 12 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 10 -log 0 -fm_old
+
+./build/main -p 1 -n 8 12 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 10 -log 0

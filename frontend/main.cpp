@@ -9,13 +9,15 @@
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Crypto/PRNG.h>
 #include <fmt/format.h>
-#include <fmt/ostream.h> // 包含这个以支持流输出
+#include <fmt/ostream.h>
 #include <ipcl/ipcl.hpp>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 #include <string>
+#include <utility>
 
-#define FMT_DEPRECATED_OSTREAM
+// usr for print block data
+#define FMT_DEPRECATED_OSTREAM 1
 
 enum class Role {
   Recv,  // receiver
@@ -23,10 +25,10 @@ enum class Role {
 };
 
 void run_fmap_protocol(const CLP &cmd);
-void run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
-                       const u64 DELTA, const u64 INTERSECTION_SIZE,
-                       const u64 TRAIT, const string IP, const u64 PORT,
-                       const bool COMP_IDX, const bool PTS_SAME);
+std::pair<double, double>
+run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
+                  const u64 DELTA, const u64 INTERSECTION_SIZE, const string IP,
+                  const u64 PORT, const bool COMP_IDX, const bool PTS_SAME);
 
 int main(int argc, char **argv) {
   CLP cmd;
@@ -115,12 +117,59 @@ void run_fmap_protocol(const CLP &cmd) {
 
   // run fmap protocol
   for (auto num : nums) { // set size
+
+    // check intersection size
     auto set_size = 1 << num;
+    if (intersection_size > set_size) {
+      spdlog::error("intersection_size should not be greater than set_size");
+      return;
+    }
+
     for (auto dim : dims) {         // d
       for (auto metric : metrics) { // p
         for (auto delta : deltas) { // delta
-          run_fmap_protocol(set_size, dim, metric, delta, intersection_size,
-                            trait, ip, port, fm_old, pts_same);
+
+          spdlog::info(
+              "*********************** setting ****************************");
+          spdlog::info("set_size          : {}", set_size);
+          spdlog::info("dimension         : {} ", dim);
+          spdlog::info("metric            : l_{} ", metric);
+          spdlog::info("delta             : {} ", delta);
+          spdlog::info("intersection_size : {}", intersection_size);
+          spdlog::info("trait             : {}", trait);
+          spdlog::info("fmap_old          : {}", fm_old);
+          spdlog::info("pts_same          : {}", pts_same);
+
+          vector<double> time_sums(trait, 0);
+          vector<double> comm_sums(trait, 0.0);
+          for (u64 i = 0; i < trait; i++) {
+            auto tmp = run_fmap_protocol(set_size, dim, metric, delta,
+                                         intersection_size, ip, port, fm_old,
+                                         pts_same);
+            time_sums[i] = tmp.first;
+            comm_sums[i] = tmp.second;
+          }
+
+          double avg_online_time =
+              accumulate(time_sums.begin(), time_sums.end(), 0.0) / 1000.0 /
+              trait;
+
+          double avg_com = accumulate(comm_sums.begin(), comm_sums.end(), 0.0) /
+                           1024.0 / 1024.0 / trait;
+
+          if (fm_old) {
+            cout << std::format("[fig8_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  "
+                                "{:^10.3f}  {:^10.3f}",
+                                set_size, metric, dim, delta, avg_online_time,
+                                avg_com)
+                 << endl;
+          } else {
+            cout << std::format("[fig9_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  "
+                                "{:^10.3f}  {:^10.3f}",
+                                set_size, metric, dim, delta, avg_online_time,
+                                avg_com)
+                 << endl;
+          }
         }
         std::cout << std::endl;
       }
@@ -128,29 +177,15 @@ void run_fmap_protocol(const CLP &cmd) {
   }
 }
 
-void run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
-                       const u64 DELTA, const u64 INTERSECTION_SIZE,
-                       const u64 TRAIT, const string IP, const u64 PORT,
-                       const bool FM_OLD, const bool PTS_SAME) {
-
-  if (INTERSECTION_SIZE > PT_NUM) {
-    spdlog::error("intersection_size should not be greater than set_size");
-    return;
-  }
-
-  spdlog::info("*********************** setting ****************************");
-  spdlog::info("set_size          : {}", PT_NUM);
-  spdlog::info("dimension         : {} ", DIM);
-  spdlog::info("metric            : l_{} ", METRIC);
-  spdlog::info("delta             : {} ", DELTA);
-  spdlog::info("intersection_size : {}", INTERSECTION_SIZE);
-  spdlog::info("trait             : {}", TRAIT);
-  spdlog::info("fmap_old          : {}", FM_OLD);
-  spdlog::info("pts_same          : {}", PTS_SAME);
+std::pair<double, double>
+run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
+                  const u64 DELTA, const u64 INTERSECTION_SIZE, const string IP,
+                  const u64 PORT, const bool FM_OLD, const bool PTS_SAME) {
 
   // Paillier keys initialization
   ipcl::initializeContext("QAT");
-  ipcl::KeyPair paillier_key = ipcl::generateKeypair(2048, true);
+  ipcl::KeyPair fmap_recv = ipcl::generateKeypair(2048, true);
+  ipcl::KeyPair fmap_sender = ipcl::generateKeypair(2048, true);
   ipcl::terminateContext();
   spdlog::info("Paillier keys initialization finished");
 
@@ -185,12 +220,10 @@ void run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
 
   spdlog::info("Both parties point set sampling finished");
 
-  FPSIRecv recv(DIM, DELTA, PT_NUM, METRIC, 1, recv_pts, paillier_key.pub_key,
-                paillier_key.priv_key, socketPair0);
-  FPSISender sender(DIM, DELTA, PT_NUM, METRIC, 1, send_pts, socketPair1);
-
-  vector<double> time_sums(TRAIT, 0);
-  vector<double> comm_sums(TRAIT, 0.0);
+  FPSIRecv recv(DIM, DELTA, PT_NUM, METRIC, 1, recv_pts, fmap_recv, fmap_sender,
+                socketPair0);
+  FPSISender sender(DIM, DELTA, PT_NUM, METRIC, 1, send_pts, fmap_recv,
+                    fmap_sender, socketPair1);
 
   if (FM_OLD) {
     sender.DFmap_fig8_offline();
@@ -200,55 +233,50 @@ void run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     recv.DFmap_fig9_offline();
   }
 
-  spdlog::info("Fmap Offline phase finished");
+  spdlog::info("Fmap Offline phase finished !!");
 
-  for (u64 i = 0; i < TRAIT; i++) {
-    // Use std::bind to bind member function and object
-    simpleTimer timer;
+  // Use std::bind to bind member function and object
+  simpleTimer timer;
 
-    timer.start();
-
-    if (FM_OLD) {
-      std::thread recv_msg(std::bind(&FPSIRecv::DFmap_fig8_online, &recv));
-      std::thread send_msg(std::bind(&FPSISender::DFmap_fig8_online, &sender));
-      recv_msg.join();
-      send_msg.join();
-    } else {
-      std::thread recv_msg(std::bind(&FPSIRecv::DFmap_fig9_online, &recv));
-      std::thread send_msg(std::bind(&FPSISender::DFmap_fig9_online, &sender));
-      recv_msg.join();
-      send_msg.join();
-    }
-
-    spdlog::info("Fmap Online phase finished");
-
-    timer.end("protocol_online");
-
-    auto online_time = timer.get_by_key("protocol_online");
-    time_sums[i] = online_time;
-    comm_sums[i] = socketPair0[0].bytesReceived() + socketPair0[0].bytesSent();
-
-    recv.clear();
-    sender.clear();
-  }
-
-  double avg_online_time =
-      accumulate(time_sums.begin(), time_sums.end(), 0.0) / 1000.0 / TRAIT;
-
-  double avg_com = accumulate(comm_sums.begin(), comm_sums.end(), 0.0) /
-                   1024.0 / 1024.0 / TRAIT;
+  timer.start();
 
   if (FM_OLD) {
-    cout << std::format(
-                "[fig8_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  {:^10.3f}  {:^10.3f}",
-                PT_NUM, METRIC, DIM, DELTA, avg_online_time, avg_com)
-         << endl;
+    std::thread recv_msg(std::bind(&FPSIRecv::DFmap_fig8_online, &recv));
+    std::thread send_msg(std::bind(&FPSISender::DFmap_fig8_online, &sender));
+    recv_msg.join();
+    send_msg.join();
   } else {
-    cout << std::format(
-                "[fig9_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  {:^10.3f}  {:^10.3f}",
-                PT_NUM, METRIC, DIM, DELTA, avg_online_time, avg_com)
-         << endl;
+    std::thread recv_msg(std::bind(&FPSIRecv::DFmap_fig9_online, &recv));
+    std::thread send_msg(std::bind(&FPSISender::DFmap_fig9_online, &sender));
+    recv_msg.join();
+    send_msg.join();
   }
 
-  return;
+  spdlog::info("Fmap Online phase finished !!");
+
+  timer.end("protocol_online");
+
+  auto recv_com = recv.commus;
+  auto sender_com = sender.commus;
+
+  // double total_com = 0.0;
+  // for (auto it = recv_com.begin(); it != recv_com.end(); it++) {
+  //   total_com += it->second;
+  // }
+  // for (auto it = sender_com.begin(); it != sender_com.end(); it++) {
+  //   total_com += it->second;
+  // }
+  // cout << "Total communication in online phase: "
+  //      << total_com / 1024.0 / 1024.0 << " MB" << endl;
+
+  auto online_time = timer.get_by_key("protocol_online");
+  auto total_com =
+      socketPair0[0].bytesReceived() + socketPair1[0].bytesReceived();
+
+  spdlog::info("*********************** Result ****************************");
+  spdlog::info("Online time (s)            : {:.3f} ", online_time / 1000.0);
+  spdlog::info("Total communication (MB)   : {:.3f} ",
+               total_com / 1024.0 / 1024.0);
+  spdlog::info("***********************************************************");
+  return {online_time, total_com};
 }

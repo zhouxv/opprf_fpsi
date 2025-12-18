@@ -24,8 +24,6 @@ public:
 
   // References to some core objects
   vector<pt> &pts; // point set
-  const ipcl::PublicKey pk;
-  const ipcl::PrivateKey sk;
 
   // parameters during the intermediate process
   u64 SIDE_LEN;  // 2*delta
@@ -33,37 +31,39 @@ public:
   u64 DELTA_L2;  // delta*delta
   PRNG recv_prng;
 
-  // dFmap protocol
+  // figure 8 dFmap protocol
   PrefixParam DFMAP_PARAM;
   vector<block> dfmap_opprf_keys;
   vector<block> dfmap_opprf_values;
   vector<block> r_x_i;
-  vector<block> ID_xr;
+  vector<block> fig8_ID_xr;
+
+  // figure 9 dFmap protocol
+  const ipcl::KeyPair &fmap_recv_key;
+  const ipcl::KeyPair &fmap_sender_key;
+  vector<u64> IDs;
+  vector<u32> fm_mask;
+  ipcl::CipherText IDs_ct;
+  ipcl::PlainText mask_mul0_pt;
+  vector<vector<block>> get_id_encoding;
+  vector<u64> fig9_ID_xr;
 
   u64 psi_ca_result = 0;
-
-  void clear() {
-    psi_ca_result = 0;
-    for (auto socket : sockets) {
-      socket.mImpl->mBytesSent = 0;
-      socket.mImpl->mBytesReceived = 0;
-    }
-    commus.clear();
-    fpsi_timer.clear();
-  }
 
   // Pre-computed datas
 
   FPSIRecv(u64 dim, u64 delta, u64 pt_num, u64 metric, u64 thread_num,
-           vector<pt> &pts, ipcl::PublicKey &pk, ipcl::PrivateKey &sk,
-           vector<coproto::Socket> &sockets)
+           vector<pt> &pts, ipcl::KeyPair &fmap_recv_key,
+           ipcl::KeyPair &fmap_sender_key, vector<coproto::Socket> &sockets)
       : DIM(dim), DELTA(delta), PTS_NUM(pt_num), METRIC(metric),
-        THREAD_NUM(thread_num), pts(pts), pk(pk), sk(sk), FPSIBase(sockets) {
+        THREAD_NUM(thread_num), pts(pts), fmap_recv_key(fmap_recv_key),
+        fmap_sender_key(fmap_sender_key), FPSIBase(sockets) {
     // Parameter Initialization
     SIDE_LEN = 2 * delta;
     BLK_CELLS = 1 << dim;
     DELTA_L2 = delta * delta;
     recv_prng.SetSeed(oc::sysRandomSeed());
+    // recv_prng.SetSeed(block(123, 456));
   };
 
   void DFmap_fig8_offline();
@@ -71,4 +71,5 @@ public:
 
   void DFmap_fig9_offline();
   void DFmap_fig9_online();
+  void getID();
 };
