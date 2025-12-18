@@ -62,7 +62,8 @@ public:
   void DFmap_fig8_offline();
   void DFmap_fig8_online();
 
-  void DFmap_fig9_offline();
-  void DFmap_fig9_online();
   void getID();
+  void DFmap_fig9_offline();
+  void DFmap_fig9_offline_fake();
+  void DFmap_fig9_online();
 };

@@ -29,7 +29,7 @@ std::pair<double, double>
 run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
                   const u64 DELTA, const u64 INTERSECTION_SIZE, const string IP,
                   const u64 PORT, const bool COMP_IDX, const bool PTS_SAME,
-                  const bool DETAILED);
+                  const bool DETAILED, const bool FAKE);
 
 int main(int argc, char **argv) {
   CLP cmd;
@@ -116,6 +116,7 @@ void run_fmap_protocol(const CLP &cmd) {
   const bool fm_old = cmd.isSet("fm_old");
   const bool pts_same = cmd.isSet("same");
   const bool detailed = cmd.isSet("detail");
+  const bool fake = cmd.isSet("fake");
 
   // run fmap protocol
   for (auto num : nums) { // set size
@@ -142,13 +143,14 @@ void run_fmap_protocol(const CLP &cmd) {
           spdlog::info("fmap_old          : {}", fm_old);
           spdlog::info("pts_same          : {}", pts_same);
           spdlog::info("detailed          : {}", detailed);
+          spdlog::info("fake              : {}", fake);
 
           vector<double> time_sums(trait, 0);
           vector<double> comm_sums(trait, 0.0);
           for (u64 i = 0; i < trait; i++) {
             auto tmp = run_fmap_protocol(set_size, dim, metric, delta,
                                          intersection_size, ip, port, fm_old,
-                                         pts_same, detailed);
+                                         pts_same, detailed, fake);
             time_sums[i] = tmp.first;
             comm_sums[i] = tmp.second;
           }
@@ -184,7 +186,7 @@ std::pair<double, double>
 run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
                   const u64 DELTA, const u64 INTERSECTION_SIZE, const string IP,
                   const u64 PORT, const bool FM_OLD, const bool PTS_SAME,
-                  const bool DETAILED) {
+                  const bool DETAILED, const bool FAKE) {
   simpleTimer timer;
 
   // Paillier keys initialization
@@ -235,11 +237,15 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     sender.DFmap_fig8_offline();
     recv.DFmap_fig8_offline();
   } else {
-    sender.DFmap_fig9_offline();
-    recv.DFmap_fig9_offline();
+    if (FAKE) {
+      sender.DFmap_fig9_offline_fake();
+      recv.DFmap_fig9_offline_fake();
+    } else {
+      sender.DFmap_fig9_offline();
+      recv.DFmap_fig9_offline();
+    }
   }
   timer.end("protocol_offline");
-
   spdlog::info("Fmap Offline phase finished !!");
 
   timer.start();

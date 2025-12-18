@@ -242,6 +242,52 @@ void FPSISender::DFmap_fig9_offline() {
   fpsi_timer.merge(fig9_offline);
 }
 
+void FPSISender::DFmap_fig9_offline_fake() {
+  PRNG prng(oc::sysRandomSeed());
+  IDs.resize(PTS_NUM, 0);
+  prng.get(IDs.data(), IDs.size());
+
+  u64 okvs_mN = PTS_NUM * DIM * 2;
+  RBOKVS rb_okvs;
+  rb_okvs.init(okvs_mN, OKVS_EPSILON, OKVS_LAMBDA, OKVS_SEED);
+  u64 okvs_mSize = rb_okvs.mSize;
+  u64 value_block_length = PAILLIER_CIPHER_SIZE_IN_BLOCK;
+
+  get_id_encoding =
+      vector<vector<block>>(okvs_mSize, vector<block>(value_block_length));
+
+  for (auto &row : get_id_encoding) {
+    prng.get(row.data(), row.size());
+  }
+
+  spdlog::debug("[send] getID fake finished");
+
+  fm_mask.resize(PTS_NUM + 1, 0);
+  prng.get(fm_mask.data(), fm_mask.size());
+
+  vector<BigNumber> IDs_bn(PTS_NUM);
+
+  vector<u64> fm_mask_mul0(PTS_NUM, 0);
+  vector<BigNumber> fm_mask_mul0_bn(PTS_NUM);
+  prng.get(fm_mask_mul0.data(), fm_mask_mul0.size());
+
+  for (u64 i = 0; i < PTS_NUM; i++) {
+    fm_mask_mul0_bn[i] =
+        BigNumber(reinterpret_cast<Ipp32u *>(&fm_mask_mul0[i]), 2);
+    IDs_bn[i] = BigNumber(reinterpret_cast<Ipp32u *>(&IDs[i]), 2);
+  }
+
+  ipcl::initializeContext("QAT");
+  ipcl::setHybridMode(ipcl::HybridMode::OPTIMAL);
+
+  mask_mul0_pt = ipcl::PlainText(fm_mask_mul0_bn);
+  IDs_ct = ipcl::CipherText(fmap_recv_key.pub_key, IDs_bn);
+
+  ipcl::terminateContext();
+
+  spdlog::debug("[send] DFmap_fig9_offline_fake finished");
+}
+
 void FPSISender::DFmap_fig9_online() {
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   // receive recv_get_id_encodings
