@@ -5,6 +5,7 @@ WORKDIR /home
 # Install dependencies
 RUN apt-get update && \
     apt-get install -y \
+    vim \
     git \
     python3 \
     python3-pip \
@@ -29,9 +30,6 @@ RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 90 && \
     update-alternatives --set gcc /usr/bin/gcc-13 && \
     update-alternatives --set g++ /usr/bin/g++-13
-
-RUN apt-get update && \
-    apt-get install -y wget
 
 # Install thirdparty dependencies
 COPY ./shell_install_all_dependencies.sh ./

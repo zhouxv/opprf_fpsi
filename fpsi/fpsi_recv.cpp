@@ -108,8 +108,10 @@ void FPSIRecv::getID() {
         BigNumber(reinterpret_cast<Ipp32u *>(&random_values[i]), 2);
   }
 
+  get_id_timer.start();
   ipcl::PlainText randoms_pt = ipcl::PlainText(random_values_bns);
   ipcl::CipherText random_ciphers = fmap_recv_key.pub_key.encrypt(randoms_pt);
+  get_id_timer.end("recv_getid_random_enc");
   ipcl::terminateContext();
 
   spdlog::debug("recv getID() random numbers computed");
