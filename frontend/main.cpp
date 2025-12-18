@@ -28,7 +28,8 @@ void run_fmap_protocol(const CLP &cmd);
 std::pair<double, double>
 run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
                   const u64 DELTA, const u64 INTERSECTION_SIZE, const string IP,
-                  const u64 PORT, const bool COMP_IDX, const bool PTS_SAME);
+                  const u64 PORT, const bool COMP_IDX, const bool PTS_SAME,
+                  const bool DETAILED);
 
 int main(int argc, char **argv) {
   CLP cmd;
@@ -114,6 +115,7 @@ void run_fmap_protocol(const CLP &cmd) {
   const u64 port = cmd.getOr<u64>("port", 1212);
   const bool fm_old = cmd.isSet("fm_old");
   const bool pts_same = cmd.isSet("same");
+  const bool detailed = cmd.isSet("detail");
 
   // run fmap protocol
   for (auto num : nums) { // set size
@@ -139,13 +141,14 @@ void run_fmap_protocol(const CLP &cmd) {
           spdlog::info("trait             : {}", trait);
           spdlog::info("fmap_old          : {}", fm_old);
           spdlog::info("pts_same          : {}", pts_same);
+          spdlog::info("detailed          : {}", detailed);
 
           vector<double> time_sums(trait, 0);
           vector<double> comm_sums(trait, 0.0);
           for (u64 i = 0; i < trait; i++) {
             auto tmp = run_fmap_protocol(set_size, dim, metric, delta,
                                          intersection_size, ip, port, fm_old,
-                                         pts_same);
+                                         pts_same, detailed);
             time_sums[i] = tmp.first;
             comm_sums[i] = tmp.second;
           }
@@ -180,7 +183,9 @@ void run_fmap_protocol(const CLP &cmd) {
 std::pair<double, double>
 run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
                   const u64 DELTA, const u64 INTERSECTION_SIZE, const string IP,
-                  const u64 PORT, const bool FM_OLD, const bool PTS_SAME) {
+                  const u64 PORT, const bool FM_OLD, const bool PTS_SAME,
+                  const bool DETAILED) {
+  simpleTimer timer;
 
   // Paillier keys initialization
   ipcl::initializeContext("QAT");
@@ -225,6 +230,7 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   FPSISender sender(DIM, DELTA, PT_NUM, METRIC, 1, send_pts, fmap_recv,
                     fmap_sender, socketPair1);
 
+  timer.start();
   if (FM_OLD) {
     sender.DFmap_fig8_offline();
     recv.DFmap_fig8_offline();
@@ -232,11 +238,9 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     sender.DFmap_fig9_offline();
     recv.DFmap_fig9_offline();
   }
+  timer.end("protocol_offline");
 
   spdlog::info("Fmap Offline phase finished !!");
-
-  // Use std::bind to bind member function and object
-  simpleTimer timer;
 
   timer.start();
 
@@ -269,14 +273,26 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   // cout << "Total communication in online phase: "
   //      << total_com / 1024.0 / 1024.0 << " MB" << endl;
 
+  auto offline_time = timer.get_by_key("protocol_offline");
   auto online_time = timer.get_by_key("protocol_online");
   auto total_com =
       socketPair0[0].bytesReceived() + socketPair1[0].bytesReceived();
 
   spdlog::info("*********************** Result ****************************");
+  spdlog::info("Offline time (s)           : {:.3f} ", offline_time / 1000.0);
   spdlog::info("Online time (s)            : {:.3f} ", online_time / 1000.0);
   spdlog::info("Total communication (MB)   : {:.3f} ",
                total_com / 1024.0 / 1024.0);
+  if (DETAILED) {
+    spdlog::info("***********************************************************");
+    sender.print_commus();
+    spdlog::info("***********************************************************");
+    sender.print_time();
+    spdlog::info("***********************************************************");
+    recv.print_commus();
+    spdlog::info("***********************************************************");
+    recv.print_time();
+  }
   spdlog::info("***********************************************************");
   return {online_time, total_com};
 }

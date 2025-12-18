@@ -90,6 +90,8 @@ void FPSIRecv::DFmap_fig8_online() {
 }
 
 void FPSIRecv::getID() {
+  simpleTimer get_id_timer;
+
   vector<vector<pair<u64, u64>>> intervals(DIM); // intervals
 
   ipcl::initializeContext("QAT");
@@ -212,14 +214,22 @@ void FPSIRecv::getID() {
   padding_keys(get_id_keys, okvs_mN);
   padding_values(get_id_values, okvs_mN, value_block_length);
 
+  get_id_timer.start();
   rb_okvs.encode(get_id_keys, get_id_values, value_block_length,
                  get_id_encoding);
+  get_id_timer.end("recv_getid_encoding");
 
   spdlog::debug("getID() computation completed");
+
+  fpsi_timer.merge(get_id_timer);
 }
 
 void FPSIRecv::DFmap_fig9_offline() {
+  simpleTimer fig9_offline;
+
+  fig9_offline.start();
   getID();
+  fig9_offline.end("recv_offline_getid");
   spdlog::debug("[recv] getID finished");
 
   fm_mask.resize(PTS_NUM + 1, 0);
@@ -243,10 +253,14 @@ void FPSIRecv::DFmap_fig9_offline() {
   ipcl::initializeContext("QAT");
   ipcl::setHybridMode(ipcl::HybridMode::OPTIMAL);
 
+  fig9_offline.start();
   mask_mul0_pt = ipcl::PlainText(fm_mask_mul0_bn);
   IDs_ct = fmap_sender_key.pub_key.encrypt(ipcl::PlainText(IDs_bn));
+  fig9_offline.end("recv_offline_ids_enc");
 
   ipcl::terminateContext();
+
+  fpsi_timer.merge(fig9_offline);
 }
 
 void FPSIRecv::DFmap_fig9_online() {
@@ -262,8 +276,8 @@ void FPSIRecv::DFmap_fig9_online() {
 
   coproto::sync_wait(sockets[0].send(flattenBlocks(get_id_encoding)));
 
-  insert_commus("recv_fm_get_id_encodings", 0);
   coproto::sync_wait(sockets[0].flush());
+  insert_commus("recv_fm_get_id_encodings", 0);
   spdlog::debug("[recv] getID encodings sent finished");
 
   /*--------------------------------------------------------------------------------------------------------------------------------*/
@@ -349,8 +363,9 @@ void FPSIRecv::DFmap_fig9_online() {
   }
 
   coproto::sync_wait(sockets[0].send(flattenBlocks(u_cts_blks)));
-  insert_commus("recv_fm_u_cts", 0);
   coproto::sync_wait(sockets[0].flush());
+  insert_commus("recv_fm_u_cts", 0);
+
   spdlog::debug("[recv] u_cts sent finished");
 
   vector<block> send_u_cts_flat(PTS_NUM * PAILLIER_CIPHER_SIZE_IN_BLOCK);
@@ -380,7 +395,7 @@ void FPSIRecv::DFmap_fig9_online() {
 
   coproto::sync_wait(sockets[0].send(w_mul_mask));
   coproto::sync_wait(sockets[0].recvResize(send_w_mul_mask));
-
+  coproto::sync_wait(sockets[0].flush());
   insert_commus("recv_fm_w_mul_mask", 0);
   spdlog::debug("[recv] w_mul_mask sent finished");
 

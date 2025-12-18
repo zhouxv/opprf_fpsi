@@ -23,7 +23,7 @@ public:
 
   void print_commus() {
     for (auto &x : commus) {
-      spdlog::info("{}: {} MB", x.first, x.second);
+      spdlog::info("{}: {} MB", x.first, x.second / 1024.0 / 1024.0);
     }
   }
 
