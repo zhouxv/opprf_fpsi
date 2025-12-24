@@ -348,7 +348,7 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   }
 
   timer.end("protocol_offline");
-  spdlog::info("Fmap Offline phase finished !!");
+  spdlog::info("PSI Offline phase finished !!");
 
   timer.start();
 
@@ -357,7 +357,7 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   recv_msg.join();
   send_msg.join();
 
-  spdlog::info("Fmap Online phase finished !!");
+  spdlog::info("PSI Online phase finished !!");
 
   timer.end("protocol_online");
 

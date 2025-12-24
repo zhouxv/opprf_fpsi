@@ -451,9 +451,11 @@ void FPSISender::psi_online() {
   psi_online_timer.end("send_DFmap_fig9_online");
   DFmap_fig9_clear();
 
+  spdlog::info("Sender step1: fmap finished!");
+
   /*
-step 2: cuckoo hash
-*/
+  step 2: cuckoo hash
+  */
   vector<block> ids_blks(PTS_NUM);
   blake3_hasher hasher;
   blake3_hasher_init(&hasher);
@@ -486,4 +488,9 @@ step 2: cuckoo hash
   //                 cuckoo_table.mLocations(i, 1), cuckoo_table.mLocations(i,
   //                 2));
   // }
+
+  spdlog::debug("[send] cuckoo num_balls: {} , num_bins : {}",
+                cuckoo_table.mParams.mN, cuckoo_table.mNumBins);
+
+  spdlog::info("Sender step2: cuckoo hash finished!");
 }

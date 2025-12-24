@@ -479,10 +479,11 @@ void FPSIRecv::psi_online() {
   DFmap_fig9_online();
   psi_online_timer.end("recv_DFmap_fig9_online");
   DFmap_fig9_clear();
+  spdlog::info("Recv step1: fmap finished!");
 
   /*
-step 2: simple hash
-*/
+  step 2: simple hash
+  */
   vector<block> ids_blks(PTS_NUM);
   blake3_hasher hasher;
   blake3_hasher_init(&hasher);
@@ -523,4 +524,9 @@ step 2: simple hash
   // }
 
   // simple_table.print();
+  spdlog::debug(
+      "[recv] simple num_balls: {} , num_bins : {}, bin_max_size : {}", PTS_NUM,
+      simple_table.mNumBins, simple_table.mMaxBinSize);
+
+  spdlog::info("Recv step2: simple hash finished!");
 }
