@@ -16,6 +16,7 @@
 #include <ipcl/plaintext.hpp>
 #include <ipcl/utils/context.hpp>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 void FPSISender::DFmap_fig8_offline() {
   auto t = DELTA * 2 + 1;
@@ -426,11 +427,63 @@ void FPSISender::DFmap_fig9_online() {
   DFmap_fig9_clear();
 }
 
-void FPSISender::psi_offline() { DFmap_fig9_offline(); }
+void FPSISender::psi_offline() {
+  simpleTimer psi_offline_timer;
+  DFmap_fig9_offline();
 
-void FPSISender::psi_offline_fake() { DFmap_fig9_offline_fake(); }
+  fpsi_timer.merge(psi_offline_timer);
+}
+
+void FPSISender::psi_offline_fake() {
+  simpleTimer psi_offline_fake_timer;
+  DFmap_fig9_offline_fake();
+  fpsi_timer.merge(psi_offline_fake_timer);
+}
 
 void FPSISender::psi_online() {
+  simpleTimer psi_online_timer;
+
+  /*
+  step 1: (1,1)-DFmap send
+  */
+  psi_online_timer.start();
   DFmap_fig9_online();
+  psi_online_timer.end("send_DFmap_fig9_online");
   DFmap_fig9_clear();
+
+  /*
+step 2: cuckoo hash
+*/
+  vector<block> ids_blks(PTS_NUM);
+  blake3_hasher hasher;
+  blake3_hasher_init(&hasher);
+  for (u64 i = 0; i < PTS_NUM; i++) {
+    blake3_hasher_update(&hasher, &fig9_ID_ys[i], sizeof(fig9_ID_ys[i]));
+    blake3_hasher_finalize(&hasher, ids_blks[i].data(), 16);
+    blake3_hasher_reset(&hasher);
+  }
+
+  // for (u64 i = 0; i < 10; i++) {
+  //   spdlog::debug("[send] {} {} {}", i, fig9_ID_ys[i], ids_blks[i]);
+  // }
+
+  psi_online_timer.start();
+  CuckooIndex<NotThreadSafe> cuckoo_table;
+  cuckoo_table.init(PTS_NUM, 40, 0, 3);
+  cuckoo_table.insert(ids_blks);
+  psi_online_timer.end("send_cuckoo_hash");
+
+  fpsi_timer.merge(psi_online_timer);
+
+  // for (u64 i = 0; i < 5; i++) {
+  //   auto tmp = cuckoo_table.find(ids_blks[i]);
+  //   spdlog::debug("[recv] cuckoo index: {}, value: {}, hashindex:{}", i,
+  //                 cuckoo_table.mVals[tmp.mInputIdx], tmp.mCuckooPositon);
+
+  //   spdlog::debug("[recv] cuckoo index: {}, value: {}, hashindex:{} {} {}",
+  //   i,
+  //                 ids_blks[i], cuckoo_table.mLocations(i, 0),
+  //                 cuckoo_table.mLocations(i, 1), cuckoo_table.mLocations(i,
+  //                 2));
+  // }
 }

@@ -340,11 +340,11 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   timer.start();
 
   if (FAKE) {
-    sender.DFmap_fig9_offline_fake();
-    recv.DFmap_fig9_offline_fake();
+    sender.psi_offline_fake();
+    recv.psi_offline_fake();
   } else {
-    sender.DFmap_fig9_offline();
-    recv.DFmap_fig9_offline();
+    sender.psi_offline();
+    recv.psi_offline();
   }
 
   timer.end("protocol_offline");
@@ -352,8 +352,8 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
 
   timer.start();
 
-  std::thread recv_msg(std::bind(&FPSIRecv::DFmap_fig9_online, &recv));
-  std::thread send_msg(std::bind(&FPSISender::DFmap_fig9_online, &sender));
+  std::thread recv_msg(std::bind(&FPSIRecv::psi_online, &recv));
+  std::thread send_msg(std::bind(&FPSISender::psi_online, &sender));
   recv_msg.join();
   send_msg.join();
 
