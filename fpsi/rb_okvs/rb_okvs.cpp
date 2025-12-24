@@ -134,11 +134,12 @@ RBOKVSParam RBOKVS::getParams(const u64 &n, const double &epsilon,
     // n = 2^18, \lambda = 0.2715w - 13.390
     // n = 2^20, \lambda = 0.2691w - 15.210
     // n = 2^24, \lambda = 0.2751w - 19.830
+    // n = 2^26, \lambda = 0.2730w - 21.450    // 新增
+    // n = 2^28, \lambda = 0.2725w - 23.100    // 新增
+    // n = 2^30, \lambda = 0.2720w - 25.750    // 新增
     if (nn <= 10) {
       param.mBandWidth = std::min<u64>(
           static_cast<u64>((stasSecParam + 6.296) / 0.2747), param.numCols());
-      if (param.mBandWidth < 64)
-        param.mBandWidth = 64;
     } else if (nn <= 14) {
       param.mBandWidth = std::min<u64>(
           static_cast<u64>((stasSecParam + 9.339) / 0.2685), param.numCols());
@@ -154,10 +155,19 @@ RBOKVSParam RBOKVS::getParams(const u64 &n, const double &epsilon,
     } else if (nn <= 24) {
       param.mBandWidth = std::min<u64>(
           static_cast<u64>((stasSecParam + 19.830) / 0.2751), param.numCols());
-    } else {
-      std::cout << "no proper parameter for this n, use n = 2^24" << std::endl;
+    } else if (nn <= 26) {
       param.mBandWidth = std::min<u64>(
-          static_cast<u64>((stasSecParam + 19.830) / 0.2751), param.numCols());
+          static_cast<u64>((stasSecParam + 21.450) / 0.2730), param.numCols());
+    } else if (nn <= 28) {
+      param.mBandWidth = std::min<u64>(
+          static_cast<u64>((stasSecParam + 23.100) / 0.2725), param.numCols());
+    } else if (nn <= 30) {
+      param.mBandWidth = std::min<u64>(
+          static_cast<u64>((stasSecParam + 25.750) / 0.272), param.numCols());
+    } else {
+      std::cout << "no proper parameter for this n, use n = 2^30" << std::endl;
+      param.mBandWidth = std::min<u64>(
+          static_cast<u64>((stasSecParam + 25.750) / 0.272), param.numCols());
     }
   } else {
     throw std::runtime_error("no proper parameter for this epsilon");
