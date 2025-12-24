@@ -1,7 +1,6 @@
 #pragma once
 #include "config.h"
 #include "utils/simpleTimer.h"
-#include "utils/util.h"
 
 #include <coproto/Socket/Socket.h>
 #include <vector>
