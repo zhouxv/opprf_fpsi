@@ -423,12 +423,14 @@ void FPSISender::DFmap_fig9_online() {
   spdlog::debug("[send] fig9_ID_xr computed finished");
 
   // final clean up
-  // IDs.clear();
-  // IDs.shrink_to_fit();
-  // fm_mask.clear();
-  // fm_mask.shrink_to_fit();
-  // get_id_encoding.clear();
-  // get_id_encoding.shrink_to_fit();
-  // IDs_ct.clear();
-  // mask_mul0_pt.clear();
+  DFmap_fig9_clear();
+}
+
+void FPSISender::psi_offline() { DFmap_fig9_offline(); }
+
+void FPSISender::psi_offline_fake() { DFmap_fig9_offline_fake(); }
+
+void FPSISender::psi_online() {
+  DFmap_fig9_online();
+  DFmap_fig9_clear();
 }

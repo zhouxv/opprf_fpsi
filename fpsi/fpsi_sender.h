@@ -38,6 +38,7 @@ public:
   // figure 9 dFmap protocol
   const ipcl::KeyPair &fmap_recv_key;
   const ipcl::KeyPair &fmap_sender_key;
+
   vector<u64> IDs;
   vector<u32> fm_mask;
   ipcl::CipherText IDs_ct;
@@ -66,4 +67,19 @@ public:
   void DFmap_fig9_offline();
   void DFmap_fig9_offline_fake();
   void DFmap_fig9_online();
+
+  void psi_offline();
+  void psi_offline_fake();
+  void psi_online();
+
+  void DFmap_fig9_clear() {
+    IDs.clear();
+    IDs.shrink_to_fit();
+    fm_mask.clear();
+    fm_mask.shrink_to_fit();
+    get_id_encoding.clear();
+    get_id_encoding.shrink_to_fit();
+    IDs_ct.clear();
+    mask_mul0_pt.clear();
+  }
 };

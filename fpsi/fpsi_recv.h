@@ -73,4 +73,19 @@ public:
   void DFmap_fig9_offline_fake();
   void DFmap_fig9_online();
   void getID();
+
+  void psi_offline();
+  void psi_offline_fake();
+  void psi_online();
+
+  void DFmap_fig9_clear() {
+    IDs.clear();
+    IDs.shrink_to_fit();
+    fm_mask.clear();
+    fm_mask.shrink_to_fit();
+    get_id_encoding.clear();
+    get_id_encoding.shrink_to_fit();
+    IDs_ct.clear();
+    mask_mul0_pt.clear();
+  }
 };

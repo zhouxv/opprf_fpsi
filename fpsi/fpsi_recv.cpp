@@ -452,14 +452,13 @@ void FPSIRecv::DFmap_fig9_online() {
     fig9_ID_xr[i] = send_w_mul_mask[i] / (u128)fm_mask[i + 1];
   }
   spdlog::debug("[recv] fig9_ID_xr computed finished");
+}
 
-  // final clean up
-  // IDs.clear();
-  // IDs.shrink_to_fit();
-  // fm_mask.clear();
-  // fm_mask.shrink_to_fit();
-  // get_id_encoding.clear();
-  // get_id_encoding.shrink_to_fit();
-  // IDs_ct.clear();
-  // mask_mul0_pt.clear();
+void FPSIRecv::psi_offline() { DFmap_fig9_offline(); }
+
+void FPSIRecv::psi_offline_fake() { DFmap_fig9_offline_fake(); }
+
+void FPSIRecv::psi_online() {
+  DFmap_fig9_online();
+  DFmap_fig9_clear();
 }
