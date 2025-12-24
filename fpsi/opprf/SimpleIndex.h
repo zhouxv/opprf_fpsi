@@ -71,9 +71,7 @@ public:
   Matrix<Item> mBins;
   u64 mNumBins;
 
-  // numBalls x mNumHashFunctions matrix, (i,j) contains the i'th items
-  // hash value under hash index j.
-  Matrix<u64> mItemToBinMap;
+  Matrix<u32> mLocations;
 
   // The some of each bin.
   std::vector<u64> mBinSizes;
@@ -85,7 +83,10 @@ public:
 
   void init(u64 numBins, u64 numBalls, u64 statSecParam = 40,
             u64 numHashFunction = 3);
-  void insertItems(span<block> items, block hashingSeed);
+  void insert(span<block> items, block hashingSeed);
+
+  // insert hashed items
+  void insert(span<block> items);
 };
 
 } // namespace volePSI

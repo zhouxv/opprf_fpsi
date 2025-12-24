@@ -2,7 +2,12 @@
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/SodiumCurve.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
 #include <vector>
+
+// usr for print block data
+#define FMT_DEPRECATED_OSTREAM 1
 
 using namespace oc;
 using namespace std;

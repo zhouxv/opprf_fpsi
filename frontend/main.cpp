@@ -6,14 +6,10 @@
 #include <cryptoTools/Common/CLP.h>
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Crypto/PRNG.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
+
 #include <ipcl/ipcl.hpp>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
-
-// usr for print block data
-#define FMT_DEPRECATED_OSTREAM 1
 
 int main(int argc, char **argv) {
   CLP cmd;
