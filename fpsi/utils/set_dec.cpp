@@ -27,34 +27,6 @@ string get_first_n_chars(const string &s, u64 n) {
   return s.substr(0, n);
 }
 
-/*
- Get the character at index n of a string (0-based)
-*/
-string get_char_at_index(const string &s, u64 index) {
-  if (index < s.size()) {
-    return string(1, s[index]);
-  }
-  return ""; // if index is out of range, return empty string
-}
-
-/*
-Get the number of common prefix bits between two strings
-*/
-u64 common_prefix_length(const string &s1, const string &s2) {
-  u64 length = 0;
-  u64 min_length = min(s1.size(), s2.size());
-
-  for (u64 i = 0; i < min_length; ++i) {
-    if (s1[i] == s2[i]) {
-      ++length;
-    } else {
-      break;
-    }
-  }
-
-  return length;
-}
-
 // Find the largest value in `u_set` that is less than `dec`
 u64 set_round(u64 dec, const set<u64> &u_set) {
   if (u_set.empty()) {
@@ -71,154 +43,7 @@ u64 set_round(u64 dec, const set<u64> &u_set) {
   --it; // Move to the largest element less than dec
   return *it;
 }
-
-// Trie structure definition
-struct TrieNode {
-  unique_ptr<TrieNode> children[2]; // left and right children
-  string value;                     // leaf node value
-
-  TrieNode(string val = "") : value(std::move(val)) {}
-
-  // Initialize the tree with default bit length
-  u64 initialize_default(u64 x, u64 y) { return initialize(x, y, NUM_BITS); }
-
-  // Construct a binary Trie tree based on the interval [x, y]
-  u64 initialize(u64 x, u64 y, u64 bits) {
-    if (x > y) {
-      cerr << "Error: x must be less than or equal to y" << endl;
-      return 0;
-    }
-    if (x == y) {
-      cerr << "Warning: x equal to y" << endl;
-      value = to_binary_string(x, bits);
-      return 0;
-    }
-
-    string left = to_binary_string(x, bits);
-    string right = to_binary_string(y, bits);
-
-    u64 common_length = common_prefix_length(left, right);
-    u64 tree_levels = bits - common_length;
-
-    value = get_first_n_chars(left, bits - tree_levels);
-    fill_tree(tree_levels, 0);
-    tail_tree(left, right, tree_levels, 0, common_length);
-
-    return tree_levels;
-  }
-
-  // Fill the Trie tree to make it a complete binary tree
-  void fill_tree(u64 height, u64 level) {
-    if (level < height) {
-      children[0] = make_unique<TrieNode>("0");
-      children[1] = make_unique<TrieNode>("1");
-
-      children[0]->fill_tree(height, level + 1);
-      children[1]->fill_tree(height, level + 1);
-    }
-  }
-
-  // Tailor the Trie tree based on the interval boundaries
-  void tail_tree(const string &left, const string &right, u64 height, u64 level,
-                 u64 index) {
-    tail_tree_left(left, height, level, index);
-    tail_tree_right(right, height, level, index);
-  }
-
-  void tail_tree_left(const string &left, u64 height, u64 level, u64 index) {
-    string next_value = get_char_at_index(left, index);
-
-    if (level < height) {
-      if (next_value == "0") {
-        if (children[0]) {
-          children[0]->tail_tree_left(left, height, level + 1, index + 1);
-        }
-      } else if (next_value == "1") {
-        children[0].reset();
-        if (children[1]) {
-          children[1]->tail_tree_left(left, height, level + 1, index + 1);
-        }
-      }
-    }
-  }
-
-  void tail_tree_right(const string &right, u64 height, u64 level, u64 index) {
-    string next_value = get_char_at_index(right, index);
-
-    if (level < height) {
-      if (next_value == "0") {
-        children[1].reset();
-        if (children[0]) {
-          children[0]->tail_tree_right(right, height, level + 1, index + 1);
-        }
-      } else if (next_value == "1") {
-        if (children[1]) {
-          children[1]->tail_tree_right(right, height, level + 1, index + 1);
-        }
-      }
-    }
-  }
-
-  // Get all maximal enclosing complete subtries
-  vector<string> get_maximal_enclosing_complete_subtries(u64 tree_levels) {
-    vector<string> subtries;
-    collect_maximal_subtries(subtries, tree_levels, 0, value);
-    return subtries;
-  }
-
-  void collect_maximal_subtries(vector<string> &subtries, u64 height, u64 level,
-                                const string &prefix) {
-    if (is_complete_binary_tree(height, level)) {
-      subtries.push_back(prefix);
-      return;
-    }
-
-    for (const auto &child : children) {
-      if (child) {
-        child->collect_maximal_subtries(subtries, height, level + 1,
-                                        prefix + child->value);
-      }
-    }
-  }
-
-  bool is_complete_binary_tree(u64 height, u64 level) {
-    if (level == height) {
-      return true;
-    }
-
-    bool left_complete =
-        children[0] && children[0]->is_complete_binary_tree(height, level + 1);
-    bool right_complete =
-        children[1] && children[1]->is_complete_binary_tree(height, level + 1);
-
-    return left_complete && right_complete;
-  }
-
-  // Print the Trie tree
-  void print_tree(u64 depth = 0) {
-    cout << string(depth * 2, ' ') << "Value: " << value << endl;
-    for (const auto &child : children) {
-      if (child) {
-        child->print_tree(depth + 1);
-      }
-    }
-  }
-};
 } // namespace
-
-/// Pad with 1s at the lower bits
-u64 up_bound(const string &prefix) {
-  string temp_str = prefix;
-  temp_str.append(NUM_BITS - prefix.length(), '1');
-  return bitset<NUM_BITS>(temp_str).to_ullong();
-}
-
-/// Pad with 0s at the lower bits
-u64 low_bound(const string &prefix) {
-  string temp_str = prefix;
-  temp_str.append(NUM_BITS - prefix.length(), '0');
-  return bitset<NUM_BITS>(temp_str).to_ullong();
-}
 
 // Decompose the interval [min, max] using an improved method in appendix
 vector<string> decompose_improve(u64 min, u64 max) {
@@ -318,18 +143,6 @@ vector<string> set_prefix(u64 value, const set<u64> &u_set) {
 
   for (u64 i : u_set) {
     prefixes.push_back(get_first_n_chars(value_str, NUM_BITS - i));
-  }
-
-  return prefixes;
-}
-
-vector<string> prefix(u64 value, u64 u) {
-  string value_str = to_binary_string(value, NUM_BITS);
-  vector<string> prefixes;
-
-  while (u < 0) {
-    prefixes.push_back(get_first_n_chars(value_str, NUM_BITS - u));
-    u--;
   }
 
   return prefixes;
