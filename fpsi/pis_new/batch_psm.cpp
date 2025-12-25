@@ -18,7 +18,7 @@
 coproto::task<BitVector> Batch_PSM_recv(vector<u64> &eles, const u64 batch_size,
                                         coproto::Socket &socket) {
   u64 bit_length = 64;
-  auto input_bits = toBitVector(eles, bit_length);
+  auto input_bits = toBitVector(oc::span<u64>(eles), bit_length);
   u64 batch_num = eles.size() / batch_size;
   u64 num_triples = eles.size() * bit_length;
 
@@ -53,7 +53,7 @@ coproto::task<BitVector> Batch_PSM_send(vector<u64> &datas, u64 batch_size,
     }
   }
 
-  auto input_bits = toBitVector(datas_copy, bit_length);
+  auto input_bits = toBitVector(oc::span<u64>(datas_copy), bit_length);
   input_bits = ~input_bits;
 
   Triples triples(num_triples);

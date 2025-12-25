@@ -100,13 +100,3 @@ coproto::task<> eq1(coproto::Socket &chl, u64 length, Triples &triples,
   }
   res1.resize(n);
 }
-
-BitVector toBitVector(std::span<u64> data, u64 length) {
-  BitVector bv(data.size() * length);
-  for (u64 i = 0; i < data.size(); i++) {
-    for (u64 j = 0; j < length; j++) {
-      bv[i * length + j] = (data[i] >> j) & 1;
-    }
-  }
-  return bv;
-}
