@@ -18,7 +18,13 @@ using namespace volePSI;
 using pt = vector<u64>;
 using u128 = __uint128_t;
 
+/*
+Parameters for cuckoo hash
+*/
 const block CUCKOO_SEED = block(0x12321412412312, 0x64628646482);
+const u64 NUM_HASH_FUNC = 3;
+const u64 CUCKOO_SEC_PARAM = 40;
+const u64 STASH_SIZE = 0;
 
 /*
 Parameters and definitions related to OKVS
