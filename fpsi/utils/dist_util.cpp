@@ -2,7 +2,7 @@
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/PRNG.h>
 
-#include "utils/util.h"
+#include "dist_util.h"
 
 void sample_points(u64 dim, u64 delta, u64 send_size, u64 recv_size,
                    u64 intersection_size, vector<pt> &send_pts,
@@ -287,125 +287,5 @@ u64 fast_pow(u64 base, u64 exp) {
     base *= base;
     exp >>= 1;
   }
-  return result;
-}
-
-// Optimized version using sorting (your approach)
-vector<u64> get_phi_dim_optimized(const vector<pt> &pts, u64 delta) {
-  auto pt_num = pts.size();
-  u64 dim = pts[0].size();
-  vector<u64> common_phi_dims;
-
-  // Iterate through each dimension
-  for (u64 d = 0; d < dim; ++d) {
-    // Extract and sort all coordinates in this dimension
-    vector<pair<u64, u64>> intervals; // store (coordinate, original_index)
-    for (u64 i = 0; i < pt_num; ++i) {
-      intervals.push_back({pts[i][d], i});
-    }
-
-    // Sort by coordinate
-    sort(intervals.begin(), intervals.end());
-
-    bool dimension_is_valid = true;
-
-    // Check adjacent intervals for overlap
-    for (u64 i = 0; i < intervals.size() - 1; ++i) {
-      u64 current_upper = intervals[i].first + delta;
-      u64 next_lower = intervals[i + 1].first - delta;
-
-      // If intervals overlap, this dimension cannot be phi for all points
-      if (current_upper >= next_lower) {
-        dimension_is_valid = false;
-        break;
-      }
-    }
-
-    if (dimension_is_valid) {
-      common_phi_dims.push_back(d);
-      // break;
-    }
-  }
-
-  return common_phi_dims;
-}
-
-vector<block> bignumer_to_block_vector(const BigNumber &bn) {
-  vector<u32> ct;
-  bn.num2vec(ct);
-
-  vector<block> cipher_block(PAILLIER_CIPHER_SIZE_IN_BLOCK, ZeroBlock);
-
-  PRNG prng(oc::sysRandomSeed());
-
-  if (ct.size() < PAILLIER_CIPHER_SIZE_IN_BLOCK * 4) {
-    for (auto i = 0; i < PAILLIER_CIPHER_SIZE_IN_BLOCK; i++) {
-      cipher_block[i] = prng.get<block>();
-    }
-  } else {
-    for (auto i = 0; i < PAILLIER_CIPHER_SIZE_IN_BLOCK; i++) {
-      cipher_block[i] =
-          block(((u64(ct[4 * i + 3])) << 32) + (u64(ct[4 * i + 2])),
-                ((u64(ct[4 * i + 1])) << 32) + (u64(ct[4 * i])));
-    }
-  }
-
-  return cipher_block;
-}
-
-BigNumber block_vector_to_bignumer(const std::vector<block> &ct) {
-  std::vector<uint32_t> ct_u32(PAILLIER_CIPHER_SIZE_IN_BLOCK * 4, 0);
-  u32 temp[4];
-  for (auto i = 0; i < PAILLIER_CIPHER_SIZE_IN_BLOCK; i++) {
-    memcpy(temp, ct[i].data(), 16);
-
-    ct_u32[4 * i] = temp[0];
-    ct_u32[4 * i + 1] = temp[1];
-    ct_u32[4 * i + 2] = temp[2];
-    ct_u32[4 * i + 3] = temp[3];
-  }
-  BigNumber bn = BigNumber(ct_u32.data(), ct_u32.size());
-  return bn;
-}
-
-vector<block> flattenBlocks(const vector<vector<block>> &blockData) {
-  // 首先计算总元素数量
-  size_t total_size = 0;
-  for (const auto &inner_vec : blockData) {
-    total_size += inner_vec.size();
-  }
-
-  // 预分配足够的内存
-  vector<block> result;
-  result.reserve(total_size);
-
-  // 逐个向量进行内存拷贝
-  for (const auto &inner_vec : blockData) {
-    if (!inner_vec.empty()) {
-      // 直接使用内存拷贝，避免逐个push_back
-      size_t old_size = result.size();
-      result.resize(old_size + inner_vec.size());
-      memcpy(result.data() + old_size, inner_vec.data(),
-             inner_vec.size() * sizeof(block));
-    }
-  }
-
-  return result;
-}
-
-vector<vector<block>> chunkFixedSizeBlocks(const vector<block> &flatData,
-                                           size_t chunk_size) {
-  assert(chunk_size > 0 && "Chunk size must be positive");
-  assert(flatData.size() % chunk_size == 0 &&
-         "Data size must be divisible by chunk size");
-
-  vector<vector<block>> result;
-  result.reserve(flatData.size() / chunk_size);
-
-  for (size_t i = 0; i < flatData.size(); i += chunk_size) {
-    result.emplace_back(flatData.begin() + i,
-                        flatData.begin() + i + chunk_size);
-  }
-
   return result;
 }

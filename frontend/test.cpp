@@ -4,7 +4,6 @@
 #include "config.h"
 #include "opprf/Opprf.h"
 #include "utils/simpleTimer.h"
-#include "utils/util.h"
 
 #include <coproto/Socket/LocalAsyncSock.h>
 #include <cryptoTools/Common/CLP.h>
@@ -120,35 +119,6 @@ void test_Vole_Noisy(const oc::CLP &cmd) {
     Vole_Noisy_test_impl<block, block, CoeffCtxGF128>(n);
     Vole_Noisy_test_impl<std::array<u32, 11>, u32, CoeffCtxArray<u32, 11>>(n);
   }
-}
-
-void test_get_phi(const oc::CLP &cmd) {
-  auto num = cmd.getOr("n", 8);
-  auto dim = cmd.getOr("d", 2);
-  auto delta = cmd.getOr("delta", 10);
-  auto trait = cmd.getOr("trait", 10);
-  auto pt_num = 1 << num;
-  vector<pt> pts(pt_num, vector<u64>(dim, 0));
-
-  cout << "pt_num: " << pt_num << ", dim: " << dim << " , delta: " << delta
-       << endl;
-
-  u64 count = 0;
-  for (u64 i = 0; i < trait; i++) {
-    PRNG prng(oc::sysRandomSeed());
-
-    for (u64 i = 0; i < pt_num; i++) {
-      for (u64 j = 0; j < dim; j++) {
-        pts[i][j] = (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 3 * delta) +
-                    1.5 * delta;
-      }
-    }
-
-    auto phi = get_phi_dim_optimized(pts, delta);
-    if (phi[0] == 0)
-      count++;
-  }
-  cout << "count: " << count << endl;
 }
 
 void test_pailliar(const oc::CLP &cmd) {

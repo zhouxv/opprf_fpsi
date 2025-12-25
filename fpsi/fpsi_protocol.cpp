@@ -1,8 +1,8 @@
 #include "fpsi_protocol.h"
 #include "fpsi_recv.h"
 #include "fpsi_sender.h"
+#include "utils/dist_util.h"
 #include "utils/simpleTimer.h"
-#include "utils/util.h"
 
 #include <utility>
 
@@ -176,6 +176,10 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   spdlog::info("Fmap Online phase finished !!");
 
   timer.end("protocol_online");
+
+  for (u64 i = 0; i < 10; i++) {
+    spdlog::debug("IDs[{}] {} {}", i, recv.fig9_ID_xr[i], sender.fig9_ID_ys[i]);
+  }
 
   auto recv_com = recv.commus;
   auto sender_com = sender.commus;

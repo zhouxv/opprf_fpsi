@@ -55,9 +55,6 @@ int main(int argc, char **argv) {
       test_Vole_Noisy(cmd);
       break;
     case 3:
-      test_get_phi(cmd);
-      break;
-    case 4:
       test_pailliar(cmd);
       break;
     default:

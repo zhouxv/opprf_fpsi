@@ -1,7 +1,6 @@
 #include "config.h"
 #include "fpsi_base.h"
 #include "utils/params_selects.h"
-#include "utils/util.h"
 
 #include <coproto/Socket/Socket.h>
 #include <cryptoTools/Common/CuckooIndex.h>

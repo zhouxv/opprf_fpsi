@@ -1,9 +1,14 @@
 #include "fpsi_recv.h"
+#include "config.h"
+#include "opprf/Defines.h"
 #include "opprf/Opprf.h"
 #include "opprf/SimpleIndex.h"
 #include "rb_okvs/rb_okvs.h"
+#include "utils/commu_util.h"
+#include "utils/data_conversion_util.h"
+#include "utils/okvs_util.h"
+#include "utils/set_dec.h"
 #include "utils/simpleTimer.h"
-#include "utils/util.h"
 
 #include <cryptoTools/Common/BitVector.h>
 #include <cryptoTools/Common/CuckooIndex.h>
@@ -406,27 +411,18 @@ void FPSIRecv::DFmap_fig9_online() {
 
   spdlog::debug("[recv] compute u finished");
 
-  vector<vector<block>> u_cts_blks(PTS_NUM);
-  for (u64 i = 0; i < PTS_NUM; i++) {
-    u_cts_blks[i] = bignumer_to_block_vector(u_cts[i]);
-  }
-
-  coproto::sync_wait(sockets[0].send(flattenBlocks(u_cts_blks)));
+  coproto::sync_wait(
+      sockets[0].send(bignumers_to_block_vector(u_cts.getTexts())));
   coproto::sync_wait(sockets[0].flush());
   insert_commus("recv_fm_u_cts", 0);
 
   spdlog::debug("[recv] u_cts sent finished");
 
-  vector<block> send_u_cts_flat(PTS_NUM * PAILLIER_CIPHER_SIZE_IN_BLOCK);
-  coproto::sync_wait(sockets[0].recvResize(send_u_cts_flat));
+  vector<block> send_u_cts_blks(PTS_NUM * PAILLIER_CIPHER_SIZE_IN_BLOCK);
+  coproto::sync_wait(sockets[0].recvResize(send_u_cts_blks));
 
-  auto send_u_cts =
-      chunkFixedSizeBlocks(send_u_cts_flat, PAILLIER_CIPHER_SIZE_IN_BLOCK);
-
-  vector<BigNumber> send_u_cts_bn(PTS_NUM);
-  for (u64 i = 0; i < PTS_NUM; i++) {
-    send_u_cts_bn[i] = block_vector_to_bignumer(send_u_cts[i]);
-  }
+  vector<BigNumber> send_u_cts_bn =
+      block_vector_to_bignumers(send_u_cts_blks, PTS_NUM);
 
   auto w_pt = fmap_recv_key.priv_key.decrypt(
       ipcl::CipherText(fmap_recv_key.pub_key, send_u_cts_bn));
@@ -499,7 +495,7 @@ void FPSIRecv::psi_online() {
 
   psi_online_timer.start();
   CuckooIndex<NotThreadSafe> cuckoo_table;
-  cuckoo_table.init(PTS_NUM, 40, 0, 3);
+  cuckoo_table.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
   SimpleIndex simple_table;
   simple_table.init(cuckoo_table.mNumBins, PTS_NUM);
 
@@ -540,4 +536,39 @@ void FPSIRecv::psi_online() {
   spdlog::info("Recv step3: mp_ssFMath finished!");
 }
 
-void FPSIRecv::mp_ssFMat(SimpleIndex &st) {}
+void FPSIRecv::mp_ssFMat(SimpleIndex &st) {
+  simpleTimer fmat_timer;
+
+  // get set_dec and set_prefix param
+  auto prefix_param = PrefixParamTable::getSelectedParam(2 * DELTA + 1);
+
+  auto &tmp_idxs = st.mLocations;
+
+  auto dim_thread = [&](u64 dim_index) {
+    vector<block> keys;
+    vector<block> values;
+
+    PRNG prng(oc::sysRandomSeed());
+    vector<block> a_random(PTS_NUM * NUM_HASH_FUNC);
+    prng.get(a_random.data(), PTS_NUM * NUM_HASH_FUNC);
+
+    for (u64 i = 0; i < PTS_NUM; i++) {
+      auto prefixs = set_dec(pts[i][dim_index] - DELTA,
+                             pts[i][dim_index] + DELTA, prefix_param.first);
+    }
+  };
+
+  vector<thread> dim_threads;
+  fmat_timer.start();
+  // start dim threads
+  for (u64 t = 0; t < DIM; t++) {
+    dim_threads.emplace_back(dim_thread, t);
+  }
+
+  // wait for getList threads
+  for (auto &th : dim_threads) {
+    th.join();
+  }
+
+  fmat_timer.end("recv_fmat_threads");
+}

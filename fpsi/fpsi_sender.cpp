@@ -1,14 +1,19 @@
 #include "fpsi_sender.h"
 #include "config.h"
+#include "opprf/Defines.h"
 #include "opprf/Opprf.h"
 #include "rb_okvs/rb_okvs.h"
+#include "utils/commu_util.h"
+#include "utils/data_conversion_util.h"
+#include "utils/okvs_util.h"
+#include "utils/set_dec.h"
 #include "utils/simpleTimer.h"
-#include "utils/util.h"
 
 #include <cmath>
 #include <coproto/Common/macoro.h>
 #include <cryptoTools/Common/CuckooIndex.h>
 #include <cryptoTools/Common/Defines.h>
+#include <cryptoTools/Common/Matrix.h>
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/PRNG.h>
 #include <ipcl/bignum.h>
@@ -16,7 +21,6 @@
 #include <ipcl/plaintext.hpp>
 #include <ipcl/utils/context.hpp>
 #include <spdlog/spdlog.h>
-#include <vector>
 
 void FPSISender::DFmap_fig8_offline() {
   auto t = DELTA * 2 + 1;
@@ -314,7 +318,7 @@ void FPSISender::DFmap_fig9_online() {
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   coproto::sync_wait(sockets[0].send(flattenBlocks(get_id_encoding)));
   coproto::sync_wait(sockets[0].flush());
-  insert_commus("send_fm_get_id_encodings", 0);
+  insert_commus("sender_fm_get_id_encodings", 0);
   spdlog::debug("[send] getID encodings sent finished");
 
   /*--------------------------------------------------------------------------------------------------------------------------------*/
@@ -376,26 +380,17 @@ void FPSISender::DFmap_fig9_online() {
   //        << endl;
   // }
 
-  vector<vector<block>> u_cts_blks(PTS_NUM);
-  for (u64 i = 0; i < PTS_NUM; i++) {
-    u_cts_blks[i] = bignumer_to_block_vector(u_cts[i]);
-  }
+  vector<block> recv_u_cts_blks(PTS_NUM * PAILLIER_CIPHER_SIZE_IN_BLOCK);
+  coproto::sync_wait(sockets[0].recvResize(recv_u_cts_blks));
 
-  vector<block> recv_u_cts_flat(PTS_NUM * PAILLIER_CIPHER_SIZE_IN_BLOCK);
-  coproto::sync_wait(sockets[0].recvResize(recv_u_cts_flat));
-
-  coproto::sync_wait(sockets[0].send(flattenBlocks(u_cts_blks)));
+  coproto::sync_wait(
+      sockets[0].send(bignumers_to_block_vector(u_cts.getTexts())));
   coproto::sync_wait(sockets[0].flush());
-  insert_commus("send_fm_u_cts", 0);
+  insert_commus("sender_fm_u_cts", 0);
   spdlog::debug("[send] u_cts sent finished");
 
-  auto recv_u_cts =
-      chunkFixedSizeBlocks(recv_u_cts_flat, PAILLIER_CIPHER_SIZE_IN_BLOCK);
-
-  vector<BigNumber> recv_u_cts_bn(PTS_NUM);
-  for (u64 i = 0; i < PTS_NUM; i++) {
-    recv_u_cts_bn[i] = block_vector_to_bignumer(recv_u_cts[i]);
-  }
+  vector<BigNumber> recv_u_cts_bn =
+      block_vector_to_bignumers(recv_u_cts_blks, PTS_NUM);
 
   auto w_pt = fmap_sender_key.priv_key.decrypt(
       ipcl::CipherText(fmap_sender_key.pub_key, recv_u_cts_bn));
@@ -414,7 +409,7 @@ void FPSISender::DFmap_fig9_online() {
   coproto::sync_wait(sockets[0].send(w_mul_mask));
   coproto::sync_wait(sockets[0].flush());
 
-  insert_commus("send_fm_w_mul_mask", 0);
+  insert_commus("sender_fm_w_mul_mask", 0);
   spdlog::debug("[send] w_mul_mask sent finished");
 
   fig9_ID_ys.resize(PTS_NUM, 0);
@@ -471,7 +466,7 @@ void FPSISender::psi_online() {
 
   psi_online_timer.start();
   CuckooIndex<NotThreadSafe> cuckoo_table;
-  cuckoo_table.init(PTS_NUM, 40, 0, 3);
+  cuckoo_table.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
   cuckoo_table.insert(ids_blks);
   psi_online_timer.end("sender_cuckoo_hash");
 
@@ -504,4 +499,39 @@ void FPSISender::psi_online() {
   spdlog::info("Sender step3: mp_ssFMath finished!");
 }
 
-template <CuckooTypes Mode> void FPSISender::mp_ssFMat(CuckooIndex<Mode> &ct) {}
+template <CuckooTypes Mode> void FPSISender::mp_ssFMat(CuckooIndex<Mode> &ct) {
+  simpleTimer fmat_timer;
+
+  // get set_dec and set_prefix param
+  auto prefix_param = PrefixParamTable::getSelectedParam(2 * DELTA + 1);
+
+  // store not empty bin_idx, pt_num and hash_idx
+  oc::Matrix<u64> idxs(PTS_NUM, 3);
+  u64 count = 0;
+  for (u64 i = 0; i < ct.mNumBins; i++) {
+    auto tmp_bin = ct.mBins[i];
+    if (!tmp_bin.isEmpty()) {
+      idxs[count][0] = i;
+      idxs[count][1] = tmp_bin.idx();
+      idxs[count][2] = tmp_bin.hashIdx();
+      count++;
+    }
+  }
+
+  auto dim_thread = [&](u64 dim_index) {
+
+  };
+
+  vector<thread> dim_threads;
+  fmat_timer.start();
+  // start dim threads
+  for (u64 t = 0; t < DIM; t++) {
+    dim_threads.emplace_back(dim_thread, t);
+  }
+
+  // wait for dim threads
+  for (auto &th : dim_threads) {
+    th.join();
+  }
+  fmat_timer.end("sender_fmat_threads");
+}
