@@ -1,6 +1,7 @@
 #pragma once
 #include "config.h"
 #include "fpsi_base.h"
+#include "opprf/SimpleIndex.h"
 #include "utils/params_selects.h"
 #include "utils/util.h"
 
@@ -77,6 +78,8 @@ public:
   void psi_offline();
   void psi_offline_fake();
   void psi_online();
+
+  void mp_ssFMat(SimpleIndex &st);
 
   void DFmap_fig9_clear() {
     IDs.clear();

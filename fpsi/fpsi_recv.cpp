@@ -82,7 +82,7 @@ void FPSIRecv::DFmap_fig8_online() {
   coproto::sync_wait(sockets[0].send(opprf_size));
   coproto::sync_wait(sockets[0].recv(opprf_size_other));
 
-  volePSI::RsOpprfSender sender;
+  RsOpprfSender sender;
 
   coproto::sync_wait(sender.send(opprf_size_other, dfmap_opprf_keys,
                                  dfmap_opprf_values, recv_prng, 1, sockets[0]));
@@ -472,18 +472,18 @@ void FPSIRecv::psi_offline_fake() {
 void FPSIRecv::psi_online() {
   simpleTimer psi_online_timer;
 
-  /*
-  step 1: (1,1)-DFmap recv
-  */
+  /* ---------------------------------------------------------------------------*/
+  // step 1: (1,1)-DFmap recv
+  /* ---------------------------------------------------------------------------*/
   psi_online_timer.start();
   DFmap_fig9_online();
   psi_online_timer.end("recv_DFmap_fig9_online");
   DFmap_fig9_clear();
   spdlog::info("Recv step1: fmap finished!");
 
-  /*
-  step 2: simple hash
-  */
+  /* ---------------------------------------------------------------------------*/
+  // step 2: recv simple hash
+  /* ---------------------------------------------------------------------------*/
   vector<block> ids_blks(PTS_NUM);
   blake3_hasher hasher;
   blake3_hasher_init(&hasher);
@@ -500,13 +500,11 @@ void FPSIRecv::psi_online() {
   psi_online_timer.start();
   CuckooIndex<NotThreadSafe> cuckoo_table;
   cuckoo_table.init(PTS_NUM, 40, 0, 3);
-  volePSI::SimpleIndex simple_table;
+  SimpleIndex simple_table;
   simple_table.init(cuckoo_table.mNumBins, PTS_NUM);
 
   simple_table.insert(ids_blks);
   psi_online_timer.end("recv_simple_hash");
-
-  fpsi_timer.merge(psi_online_timer);
 
   // for (u64 i = 0; i < 5; i++) {
   //   spdlog::debug("[send] simple index: {}, value: {}, hashindex:{} {} {}",
@@ -529,4 +527,17 @@ void FPSIRecv::psi_online() {
       simple_table.mNumBins, simple_table.mMaxBinSize);
 
   spdlog::info("Recv step2: simple hash finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 3: recv mp_ssFMat
+  /* ---------------------------------------------------------------------------*/
+  psi_online_timer.start();
+  mp_ssFMat(simple_table);
+  psi_online_timer.end("recv_ssFmat");
+
+  fpsi_timer.merge(psi_online_timer);
+
+  spdlog::info("Recv step3: mp_ssFMath finished!");
 }
+
+void FPSIRecv::mp_ssFMat(SimpleIndex &st) {}

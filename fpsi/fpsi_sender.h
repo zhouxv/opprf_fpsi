@@ -4,6 +4,7 @@
 #include "utils/util.h"
 
 #include <coproto/Socket/Socket.h>
+#include <cryptoTools/Common/CuckooIndex.h>
 #include <cryptoTools/Common/block.h>
 #include <ipcl/bignum.h>
 #include <ipcl/ciphertext.hpp>
@@ -71,6 +72,8 @@ public:
   void psi_offline();
   void psi_offline_fake();
   void psi_online();
+
+  template <CuckooTypes Mode> void mp_ssFMat(CuckooIndex<Mode> &ct);
 
   void DFmap_fig9_clear() {
     IDs.clear();

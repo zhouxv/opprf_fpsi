@@ -1,4 +1,5 @@
 #pragma once
+#include "opprf/Defines.h"
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/SodiumCurve.h>
@@ -11,6 +12,7 @@
 
 using namespace oc;
 using namespace std;
+using namespace volePSI;
 
 // alias of point
 using pt = vector<u64>;

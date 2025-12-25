@@ -51,7 +51,7 @@ void FPSISender::DFmap_fig8_online() {
   coproto::sync_wait(sockets[0].recv(opprf_size_other));
   coproto::sync_wait(sockets[0].send(opprf_size));
 
-  volePSI::RsOpprfReceiver recv;
+  RsOpprfReceiver recv;
   vector<block> opprf_values(opprf_size);
 
   coproto::sync_wait(recv.receive(opprf_size_other, t_y_j, opprf_values,
@@ -90,10 +90,10 @@ void FPSISender::getID() {
   get_id_timer.start();
   ipcl::PlainText randoms_pt = ipcl::PlainText(random_values_bns);
   ipcl::CipherText random_ciphers = fmap_sender_key.pub_key.encrypt(randoms_pt);
-  get_id_timer.end("recv_getid_random_enc");
+  get_id_timer.end("sender_getid_random_enc");
   ipcl::terminateContext();
 
-  spdlog::debug("recv getID() random numbers computed");
+  spdlog::debug("sender getID() random numbers computed");
 
   // Merge interval
   for (u64 dim_index = 0; dim_index < DIM; dim_index++) {
@@ -198,7 +198,7 @@ void FPSISender::getID() {
   get_id_timer.start();
   rb_okvs.encode(get_id_keys, get_id_values, value_block_length,
                  get_id_encoding);
-  get_id_timer.end("send_getid_encoding");
+  get_id_timer.end("sender_getid_encoding");
 
   fpsi_timer.merge(get_id_timer);
 
@@ -210,7 +210,7 @@ void FPSISender::DFmap_fig9_offline() {
 
   fig9_offline.start();
   getID();
-  fig9_offline.end("recv_offline_getid");
+  fig9_offline.end("sender_offline_getid");
   spdlog::debug("[send] getID finished");
 
   fm_mask.resize(PTS_NUM + 1, 0);
@@ -237,7 +237,7 @@ void FPSISender::DFmap_fig9_offline() {
   fig9_offline.start();
   mask_mul0_pt = ipcl::PlainText(fm_mask_mul0_bn);
   IDs_ct = fmap_recv_key.pub_key.encrypt(ipcl::PlainText(IDs_bn));
-  fig9_offline.end("send_offline_ids_enc");
+  fig9_offline.end("sender_offline_ids_enc");
   ipcl::terminateContext();
 
   fpsi_timer.merge(fig9_offline);
@@ -443,19 +443,19 @@ void FPSISender::psi_offline_fake() {
 void FPSISender::psi_online() {
   simpleTimer psi_online_timer;
 
-  /*
-  step 1: (1,1)-DFmap send
-  */
+  /* ---------------------------------------------------------------------------*/
+  // step 1: (1,1)-DFmap send
+  /* ---------------------------------------------------------------------------*/
   psi_online_timer.start();
   DFmap_fig9_online();
-  psi_online_timer.end("send_DFmap_fig9_online");
+  psi_online_timer.end("sender_DFmap_fig9_online");
   DFmap_fig9_clear();
 
   spdlog::info("Sender step1: fmap finished!");
 
-  /*
-  step 2: cuckoo hash
-  */
+  /* ---------------------------------------------------------------------------*/
+  // step 2: sender cuckoo hash
+  /* ---------------------------------------------------------------------------*/
   vector<block> ids_blks(PTS_NUM);
   blake3_hasher hasher;
   blake3_hasher_init(&hasher);
@@ -473,9 +473,7 @@ void FPSISender::psi_online() {
   CuckooIndex<NotThreadSafe> cuckoo_table;
   cuckoo_table.init(PTS_NUM, 40, 0, 3);
   cuckoo_table.insert(ids_blks);
-  psi_online_timer.end("send_cuckoo_hash");
-
-  fpsi_timer.merge(psi_online_timer);
+  psi_online_timer.end("sender_cuckoo_hash");
 
   // for (u64 i = 0; i < 5; i++) {
   //   auto tmp = cuckoo_table.find(ids_blks[i]);
@@ -493,4 +491,17 @@ void FPSISender::psi_online() {
                 cuckoo_table.mParams.mN, cuckoo_table.mNumBins);
 
   spdlog::info("Sender step2: cuckoo hash finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 3: sender mp_ssFMat
+  /* ---------------------------------------------------------------------------*/
+  psi_online_timer.start();
+  mp_ssFMat(cuckoo_table);
+  psi_online_timer.end("sender_ssFmat");
+
+  fpsi_timer.merge(psi_online_timer);
+
+  spdlog::info("Sender step3: mp_ssFMath finished!");
 }
+
+template <CuckooTypes Mode> void FPSISender::mp_ssFMat(CuckooIndex<Mode> &ct) {}
