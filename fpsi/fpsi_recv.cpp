@@ -13,6 +13,7 @@
 #include <cryptoTools/Common/BitVector.h>
 #include <cryptoTools/Common/CuckooIndex.h>
 #include <cryptoTools/Common/Defines.h>
+#include <cryptoTools/Common/Matrix.h>
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/PRNG.h>
 #include <ipcl/bignum.h>
@@ -23,7 +24,7 @@
 
 void FPSIRecv::DFmap_fig8_offline() {
   auto t = DELTA * 2 + 1;
-  DFMAP_PARAM = PrefixParamTable::getSelectedParam(t);
+  DFMAP_PARAM = LpParamTable::getSelectedParam(t);
 
   // In our implementation, the probability that φ(x) equals 0 is high.
   u64 φ = 0;
@@ -238,7 +239,7 @@ void FPSIRecv::DFmap_fig9_offline() {
   fig9_offline.start();
   getID();
   fig9_offline.end("recv_offline_getid");
-  spdlog::debug("[recv] getID finished");
+  spdlog::debug("\t[recv] getID finished");
 
   fm_mask.resize(PTS_NUM + 1, 0);
   vector<u64> fm_mask_mul0(PTS_NUM, 0);
@@ -289,7 +290,7 @@ void FPSIRecv::DFmap_fig9_offline_fake() {
     prng.get(row.data(), row.size());
   }
 
-  spdlog::debug("[recv] getID fake finished");
+  spdlog::debug("\t[recv] getID fake finished");
 
   fm_mask.resize(PTS_NUM + 1, 0);
   prng.get(fm_mask.data(), fm_mask.size());
@@ -314,7 +315,7 @@ void FPSIRecv::DFmap_fig9_offline_fake() {
 
   ipcl::terminateContext();
 
-  spdlog::debug("[recv] DFmap_fig9_offline_fake finished");
+  spdlog::debug("\t[recv] DFmap_fig9_offline_fake finished");
 }
 
 void FPSIRecv::DFmap_fig9_online() {
@@ -332,7 +333,7 @@ void FPSIRecv::DFmap_fig9_online() {
 
   coproto::sync_wait(sockets[0].flush());
   insert_commus("recv_fm_get_id_encodings", 0);
-  spdlog::debug("[recv] getID encodings sent finished");
+  spdlog::debug("\t[recv] getID encodings sent finished");
 
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   // receive send_get_id_encodings
@@ -347,7 +348,7 @@ void FPSIRecv::DFmap_fig9_online() {
   auto send_encoding =
       chunkFixedSizeBlocks(flatten_get_id_encodings, get_id_value_block_length);
 
-  spdlog::debug("[send] received get_id_encodings");
+  spdlog::debug("\t[send] received get_id_encodings");
 
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   // decode send_encoding
@@ -366,7 +367,7 @@ void FPSIRecv::DFmap_fig9_online() {
     }
   }
 
-  spdlog::debug("[recv] send_encoding decoded finished");
+  spdlog::debug("\t[recv] send_encoding decoded finished");
 
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   // homomorphic addition
@@ -383,7 +384,7 @@ void FPSIRecv::DFmap_fig9_online() {
       v_add_res = v_add_res + temp;
     }
   }
-  spdlog::debug("[recv] homomorphic addition finished");
+  spdlog::debug("\t[recv] homomorphic addition finished");
 
   ipcl::terminateContext();
 
@@ -401,7 +402,7 @@ void FPSIRecv::DFmap_fig9_online() {
   //   auto tmp2 = u_dec.getElementVec(i);
   //   u128 tmp2_ = ((u128)tmp2[3] << 96) | ((u128)tmp2[2] << 64) |
   //                ((u128)tmp2[1] << 32) | tmp2[0];
-  //   cout << fmt::format("[recv] IDs2 [{}] {} {} {} {} {} {}", i, tmp_,
+  //   cout << fmt::format("\t[recv] IDs2 [{}] {} {} {} {} {} {}", i, tmp_,
   //                       fm_mask[0], fm_mask[i + 1],
   //                       (u64)fm_mask[0] * (u64)fm_mask[i + 1],
   //                       (u128)fm_mask[0] * (u128)fm_mask[i + 1] * tmp_,
@@ -409,14 +410,14 @@ void FPSIRecv::DFmap_fig9_online() {
   //        << endl;
   // }
 
-  spdlog::debug("[recv] compute u finished");
+  spdlog::debug("\t[recv] compute u finished");
 
   coproto::sync_wait(
       sockets[0].send(bignumers_to_block_vector(u_cts.getTexts())));
   coproto::sync_wait(sockets[0].flush());
   insert_commus("recv_fm_u_cts", 0);
 
-  spdlog::debug("[recv] u_cts sent finished");
+  spdlog::debug("\t[recv] u_cts sent finished");
 
   vector<block> send_u_cts_blks(PTS_NUM * PAILLIER_CIPHER_SIZE_IN_BLOCK);
   coproto::sync_wait(sockets[0].recvResize(send_u_cts_blks));
@@ -426,7 +427,7 @@ void FPSIRecv::DFmap_fig9_online() {
 
   auto w_pt = fmap_recv_key.priv_key.decrypt(
       ipcl::CipherText(fmap_recv_key.pub_key, send_u_cts_bn));
-  spdlog::debug("[recv] decrypt w finished");
+  spdlog::debug("\t[recv] decrypt w finished");
 
   vector<u128> w_mul_mask(PTS_NUM);
   for (u64 i = 0; i < PTS_NUM; i++) {
@@ -442,13 +443,13 @@ void FPSIRecv::DFmap_fig9_online() {
   coproto::sync_wait(sockets[0].recvResize(send_w_mul_mask));
   coproto::sync_wait(sockets[0].flush());
   insert_commus("recv_fm_w_mul_mask", 0);
-  spdlog::debug("[recv] w_mul_mask sent finished");
+  spdlog::debug("\t[recv] w_mul_mask sent finished");
 
   fig9_ID_xr.resize(PTS_NUM, 0);
   for (u64 i = 0; i < PTS_NUM; i++) {
     fig9_ID_xr[i] = send_w_mul_mask[i] / (u128)fm_mask[i + 1];
   }
-  spdlog::debug("[recv] fig9_ID_xr computed finished");
+  spdlog::debug("\t[recv] fig9_ID_xr computed finished");
 }
 
 void FPSIRecv::psi_offline() {
@@ -475,7 +476,7 @@ void FPSIRecv::psi_online() {
   DFmap_fig9_online();
   psi_online_timer.end("recv_DFmap_fig9_online");
   DFmap_fig9_clear();
-  spdlog::info("Recv step1: fmap finished!");
+  spdlog::info("  Recv step1: fmap finished!");
 
   /* ---------------------------------------------------------------------------*/
   // step 2: recv simple hash
@@ -490,7 +491,7 @@ void FPSIRecv::psi_online() {
   }
 
   // for (u64 i = 0; i < 10; i++) {
-  //   spdlog::debug("[recv] {} {} {}", i, fig9_ID_xr[i], ids_blks[i]);
+  //   spdlog::debug("\t[recv] {} {} {}", i, fig9_ID_xr[i], ids_blks[i]);
   // }
 
   psi_online_timer.start();
@@ -503,7 +504,7 @@ void FPSIRecv::psi_online() {
   psi_online_timer.end("recv_simple_hash");
 
   // for (u64 i = 0; i < 5; i++) {
-  //   spdlog::debug("[send] simple index: {}, value: {}, hashindex:{} {} {}",
+  //   spdlog::debug("\t[send] simple index: {}, value: {}, hashindex:{} {} {}",
   //   i,
   //                 ids_blks[i], simple_table.mLocations(i, 0),
   //                 simple_table.mLocations(i, 1), simple_table.mLocations(i,
@@ -519,10 +520,10 @@ void FPSIRecv::psi_online() {
 
   // simple_table.print();
   spdlog::debug(
-      "[recv] simple num_balls: {} , num_bins : {}, bin_max_size : {}", PTS_NUM,
-      simple_table.mNumBins, simple_table.mMaxBinSize);
+      "\t[recv] simple num_balls: {} , num_bins : {}, bin_max_size : {}",
+      PTS_NUM, simple_table.mNumBins, simple_table.mMaxBinSize);
 
-  spdlog::info("Recv step2: simple hash finished!");
+  spdlog::info("  Recv step2: simple hash finished!");
 
   /* ---------------------------------------------------------------------------*/
   // step 3: recv mp_ssFMat
@@ -533,29 +534,111 @@ void FPSIRecv::psi_online() {
 
   fpsi_timer.merge(psi_online_timer);
 
-  spdlog::info("Recv step3: mp_ssFMath finished!");
+  spdlog::info("  Recv step3: mp_ssFMath finished!");
 }
 
 void FPSIRecv::mp_ssFMat(SimpleIndex &st) {
   simpleTimer fmat_timer;
 
   // get set_dec and set_prefix param
-  auto prefix_param = PrefixParamTable::getSelectedParam(2 * DELTA + 1);
+  auto prefix_param = LinfParamTable::getSelectedParam(2 * DELTA + 1);
 
+  u64 bins_num = st.mNumBins;
   auto &tmp_idxs = st.mLocations;
 
+  u64 a_random_size = bins_num * DIM;
+  vector<block> a_random(a_random_size);
+  recv_prng.get(a_random.data(), a_random_size);
+
+  oc::Matrix<block> rr_vals(DIM, bins_num, osuCrypto::AllocType::Zeroed);
+
   auto dim_thread = [&](u64 dim_index) {
-    vector<block> keys;
-    vector<block> values;
-
+    simpleTimer dim_thread_timer;
     PRNG prng(oc::sysRandomSeed());
-    vector<block> a_random(PTS_NUM * NUM_HASH_FUNC);
-    prng.get(a_random.data(), PTS_NUM * NUM_HASH_FUNC);
 
+    /* ---------------------------------------------------------------------------*/
+    // step 1: recv getList
+    /* ---------------------------------------------------------------------------*/
+    vector<block> prefix_keys;
+    vector<block> prefix_vals;
+    u64 opprf_size(prefix_param.second * PTS_NUM * NUM_HASH_FUNC);
+    prefix_keys.reserve(opprf_size);
+    prefix_vals.reserve(opprf_size);
+
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
     for (u64 i = 0; i < PTS_NUM; i++) {
       auto prefixs = set_dec(pts[i][dim_index] - DELTA,
                              pts[i][dim_index] + DELTA, prefix_param.first);
+      for (auto prefix : prefixs) {
+        for (u64 k = 0; k < NUM_HASH_FUNC; k++) {
+          block hash_out;
+          u64 bin_idx = tmp_idxs[i][k];
+          blake3_hasher_update(&hasher, prefix.data(), prefix.size());
+          blake3_hasher_update(&hasher, &fig9_ID_xr[i], sizeof(u64));
+          blake3_hasher_update(&hasher, &k, sizeof(u64));
+          blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+          blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+          blake3_hasher_reset(&hasher);
+          prefix_keys.push_back(hash_out);
+          prefix_vals.push_back(a_random[dim_index * bins_num + bin_idx]);
+        }
+      }
     }
+
+    // spdlog::debug("\t[recv] mp_ssFMat thread [{}] —— keys size: {} , value "
+    //               "size : {}; expect size : {} ",
+    //               dim_index, prefix_keys.size(), prefix_vals.size(),
+    //               opprf_size);
+
+    padding_keys(prefix_keys, opprf_size);
+    padding_keys(prefix_vals, opprf_size);
+
+    if (dim_index == 0)
+      spdlog::info("\t[recv] mp_ssFMat thread [{}] —— step1 getlist finished!",
+                   dim_index);
+
+    /* ---------------------------------------------------------------------------*/
+    // step 3: bOPPRF RsOpprfSender
+    /* ---------------------------------------------------------------------------*/
+    u64 opprf_size_other;
+    coproto::sync_wait(sockets[dim_index].send(opprf_size));
+    coproto::sync_wait(sockets[dim_index].recv(opprf_size_other));
+
+    RsOpprfSender opprf_sender;
+
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_sender.send(opprf_size_other, prefix_keys,
+                                         prefix_vals, prng, 1,
+                                         sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_step3_opprf", dim_index));
+    insert_commus(fmt::format("recv_{}_fmat_step3", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::info(
+          "\t[recv] mp_ssFMat thread [{}] —— step3 RsOpprfSender finished!",
+          dim_index);
+
+    /* ---------------------------------------------------------------------------*/
+    // step 4: bOPPRF RsOpprfReceiver
+    /* ---------------------------------------------------------------------------*/
+    RsOpprfReceiver opprf_recv;
+
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_recv.receive(
+        opprf_size_other,
+        coproto::span<block>(a_random.data() + bins_num * dim_index, bins_num),
+        rr_vals[dim_index], prng, 1, sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_step4_opprf", dim_index));
+
+    insert_commus(fmt::format("recv_{}_fmat_step4", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::info(
+          "\t[recv] mp_ssFMat thread [{}] —— step4 RsOpprfReceiver finished!",
+          dim_index);
+
+    fpsi_timer.merge(dim_thread_timer);
   };
 
   vector<thread> dim_threads;
@@ -570,5 +653,21 @@ void FPSIRecv::mp_ssFMat(SimpleIndex &st) {
     th.join();
   }
 
-  fmat_timer.end("recv_fmat_threads");
+  /* ---------------------------------------------------------------------------*/
+  // step 5: recv ssPEQT
+  /* ---------------------------------------------------------------------------*/
+  vector<block> rr_vals_sums(bins_num, ZeroBlock);
+  for (u64 i = 0; i < rr_vals_sums.size(); i++) {
+    for (u64 j = 0; j < DIM; j++) {
+      rr_vals_sums[i] ^= rr_vals[j][i];
+    }
+  }
+
+  // for (u64 i = 0; i < bins_num; i++) {
+  //   spdlog::debug("recv bins[{}] {}", i, rr_vals_sums[i]);
+  // }
+
+  fmat_timer.end("recv_fmat_threads_all");
+
+  fpsi_timer.merge(fmat_timer);
 }

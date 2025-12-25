@@ -177,9 +177,10 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
 
   timer.end("protocol_online");
 
-  for (u64 i = 0; i < 10; i++) {
-    spdlog::debug("IDs[{}] {} {}", i, recv.fig9_ID_xr[i], sender.fig9_ID_ys[i]);
-  }
+  // for (u64 i = 0; i < 10; i++) {
+  //   spdlog::debug("IDs[{}] {} {}", i, recv.fig9_ID_xr[i],
+  //   sender.fig9_ID_ys[i]);
+  // }
 
   auto recv_com = recv.commus;
   auto sender_com = sender.commus;
@@ -279,7 +280,7 @@ void run_fpsi_protocol(const CLP &cmd) {
           double avg_com = accumulate(comm_sums.begin(), comm_sums.end(), 0.0) /
                            1024.0 / 1024.0 / trait;
 
-          cout << std::format("[fig9_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  "
+          cout << std::format("[fpsi]  {:^5}  𝐿{}  {:^5}  {:^5}  "
                               "{:^10.3f}  {:^10.3f}",
                               set_size, metric, dim, delta, avg_online_time,
                               avg_com)
