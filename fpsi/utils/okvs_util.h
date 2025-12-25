@@ -48,15 +48,7 @@ inline void padding_blocks(vector<block> &vals, u64 count) {
 
 // Pad datas to specified length
 inline void padding_keys(vector<block> &keys, u64 count) {
-  if (keys.size() >= count) {
-    return;
-  }
-
-  PRNG prng((block(oc::sysRandomSeed())));
-
-  while (keys.size() < count) {
-    keys.push_back(prng.get<block>());
-  }
+  padding_blocks(keys, count);
 }
 
 // Pad datas to specified length
