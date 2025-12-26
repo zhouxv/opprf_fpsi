@@ -6,3 +6,5 @@ void test_opprf(const oc::CLP &cmd);
 void test_Vole_Noisy(const oc::CLP &cmd);
 
 void test_pailliar(const oc::CLP &cmd);
+
+void test_batch_peqt(const oc::CLP &cmd);

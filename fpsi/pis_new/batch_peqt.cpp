@@ -1,7 +1,7 @@
-#pragma once
-#include "config.h"
-
+#include "pis_new/batch_peqt.h"
+#include "pis_new/equal.h"
 #include "pis_new/triple.h"
+
 #include <coproto/Socket/Socket.h>
 #include <cryptoTools/Common/BitVector.h>
 #include <cryptoTools/Common/Defines.h>
@@ -15,11 +15,14 @@ eles[1] vs datas[2]
 ...................
 eles[n] vs datas[n]
 */
-template <typename T>
-coproto::task<BitVector> Batch_PEQT_recv(oc::span<T> &eles,
+coproto::task<BitVector> Batch_PEQT_recv(oc::span<block> eles,
                                          coproto::Socket &socket) {
-  u64 bit_length = sizeof(T) * 8;
-  auto input_bits = toBitVector(eles, bit_length);
+  u64 bit_length = 128;
+
+  BitVector input_bits;
+  input_bits.append(reinterpret_cast<u8 *>(eles.data()),
+                    eles.size() * bit_length);
+
   u64 num_triples = eles.size() * bit_length;
 
   Triples triples(num_triples);
@@ -31,11 +34,16 @@ coproto::task<BitVector> Batch_PEQT_recv(oc::span<T> &eles,
   co_return eqRes0;
 }
 
-template <typename T>
-coproto::task<BitVector> Batch_PEQT_send(oc::span<T> &datas,
+coproto::task<BitVector> Batch_PEQT_send(oc::span<block> datas,
                                          coproto::Socket &socket) {
-  u64 bit_length = sizeof(T) * 8;
-  auto input_bits = ~toBitVector(datas, bit_length);
+  u64 bit_length = 128;
+
+  BitVector input_bits;
+
+  input_bits.append(reinterpret_cast<u8 *>(datas.data()),
+                    datas.size() * bit_length);
+
+  input_bits = ~input_bits;
 
   u64 num_triples = datas.size() * bit_length;
 

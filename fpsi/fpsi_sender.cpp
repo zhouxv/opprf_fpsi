@@ -2,6 +2,7 @@
 #include "config.h"
 #include "opprf/Defines.h"
 #include "opprf/Opprf.h"
+#include "pis_new/batch_peqt.h"
 #include "rb_okvs/rb_okvs.h"
 #include "utils/commu_util.h"
 #include "utils/data_conversion_util.h"
@@ -23,6 +24,7 @@
 #include <ipcl/ciphertext.hpp>
 #include <ipcl/plaintext.hpp>
 #include <ipcl/utils/context.hpp>
+#include <libOTe/Tools/Coproto.h>
 #include <spdlog/spdlog.h>
 
 void FPSISender::DFmap_fig8_offline() {
@@ -500,6 +502,10 @@ void FPSISender::psi_online() {
   fpsi_timer.merge(psi_online_timer);
 
   spdlog::info("  Sender step3: mp_ssFMath finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 4: sender PSI OT
+  /* ---------------------------------------------------------------------------*/
 }
 
 template <CuckooTypes Mode> void FPSISender::mp_ssFMat(CuckooIndex<Mode> &ct) {
@@ -628,8 +634,14 @@ template <CuckooTypes Mode> void FPSISender::mp_ssFMat(CuckooIndex<Mode> &ct) {
     }
   }
 
-  // for (u64 i = 0; i < bins_num; i++) {
-  //   spdlog::debug("send bins[{}] {}", i, r_vals_sums[i]);
+  fmat_timer.start();
+  auto e = Batch_PEQT_send(r_vals_sums, sockets[0]);
+  auto ee = sync_wait(e);
+  fmat_timer.end("sender_fmat_step5_batch_peqt");
+  insert_commus("sender_fmat_step5_batch_peqt", 0);
+
+  // for (u64 i = 0; i < 10; i++) {
+  //   spdlog::debug("send bins[{}] {} {}", i, r_vals_sums[i], ee[i]);
   // }
 
   fmat_timer.end("sender_fmat_threads_all");

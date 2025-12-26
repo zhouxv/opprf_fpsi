@@ -57,6 +57,9 @@ int main(int argc, char **argv) {
     case 3:
       test_pailliar(cmd);
       break;
+    case 4:
+      test_batch_peqt(cmd);
+      break;
     default:
       spdlog::error("Unknown test type", test_type);
     }

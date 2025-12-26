@@ -1,8 +1,9 @@
-
 #include "test.h"
 
 #include "config.h"
+#include "opprf/Defines.h"
 #include "opprf/Opprf.h"
+#include "pis_new/batch_peqt.h"
 #include "utils/simpleTimer.h"
 
 #include <coproto/Socket/LocalAsyncSock.h>
@@ -178,4 +179,34 @@ void test_pailliar(const oc::CLP &cmd) {
   spdlog::info("Communication for {} additions: {} KB", count, commu);
 
   ipcl::terminateContext();
+}
+
+void test_batch_peqt(const oc::CLP &cmd) {
+  u64 num = 10;
+  PRNG prng(oc::sysRandomSeed());
+  vector<block> a(num), b(num);
+
+  prng.get(a.data(), num);
+  prng.get(b.data(), num);
+  for (u64 i = 0; i < num / 2; i++) {
+    a[i] = b[i];
+  }
+
+  auto [socket0, socket1] = coproto::LocalAsyncSocket::makePair();
+
+  osuCrypto::BitVector res0, res1;
+
+  std::thread recv_thread(
+      [&]() { res0 = macoro::sync_wait(Batch_PEQT_recv(a, socket0)); });
+
+  std::thread send_thread(
+      [&]() { res1 = macoro::sync_wait(Batch_PEQT_send(b, socket1)); });
+
+  // 等待线程结束
+  recv_thread.join();
+  send_thread.join();
+
+  for (u64 i = 0; i < num; i++) {
+    spdlog::info("[{}] {} {} {} {}", i, a[i], b[i], res0[i], res1[i]);
+  }
 }

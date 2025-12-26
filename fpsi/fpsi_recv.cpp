@@ -3,6 +3,7 @@
 #include "opprf/Defines.h"
 #include "opprf/Opprf.h"
 #include "opprf/SimpleIndex.h"
+#include "pis_new/batch_peqt.h"
 #include "rb_okvs/rb_okvs.h"
 #include "utils/commu_util.h"
 #include "utils/data_conversion_util.h"
@@ -535,6 +536,10 @@ void FPSIRecv::psi_online() {
   fpsi_timer.merge(psi_online_timer);
 
   spdlog::info("  Recv step3: mp_ssFMath finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 4: recv PSI OT
+  /* ---------------------------------------------------------------------------*/
 }
 
 void FPSIRecv::mp_ssFMat(SimpleIndex &st) {
@@ -663,8 +668,14 @@ void FPSIRecv::mp_ssFMat(SimpleIndex &st) {
     }
   }
 
-  // for (u64 i = 0; i < bins_num; i++) {
-  //   spdlog::debug("recv bins[{}] {}", i, rr_vals_sums[i]);
+  fmat_timer.start();
+  auto e = Batch_PEQT_recv(rr_vals_sums, sockets[0]);
+  auto ee = sync_wait(e);
+  fmat_timer.end("recv_fmat_step5_batch_peqt");
+  insert_commus("recv_fmat_step5_batch_peqt", 0);
+
+  // for (u64 i = 0; i < 10; i++) {
+  //   spdlog::debug("recv bins[{}] {} {}", i, rr_vals_sums[i], ee[i]);
   // }
 
   fmat_timer.end("recv_fmat_threads_all");
