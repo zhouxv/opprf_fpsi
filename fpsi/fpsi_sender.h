@@ -46,6 +46,8 @@ public:
   vector<vector<block>> get_id_encoding;
   vector<u64> fig9_ID_ys;
 
+  BitVector ee;
+
   FPSISender(u64 dim, u64 delta, u64 pt_num, u64 metric, u64 thread_num,
              vector<pt> &pts, ipcl::KeyPair &fmap_recv_key,
              ipcl::KeyPair &fmap_sender_key, vector<coproto::Socket> &sockets)

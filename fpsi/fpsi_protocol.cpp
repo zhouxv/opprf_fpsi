@@ -214,8 +214,18 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     recv.print_commus();
     spdlog::info("***********************************************************");
     recv.print_time();
+    spdlog::info("***********************************************************");
+    auto count = 0;
+    for (u64 i = 0; i < PT_NUM; i++) {
+      spdlog::debug("[{}] {} {} {}", i, recv.fig9_ID_xr[i],
+                    sender.fig9_ID_ys[i],
+                    recv.fig9_ID_xr[i] == sender.fig9_ID_ys[i]);
+      if (recv.fig9_ID_xr[i] == sender.fig9_ID_ys[i])
+        count++;
+    }
+    spdlog::debug("fmap count: {}", count);
   }
-  spdlog::info("***********************************************************");
+
   return {online_time, total_com};
 }
 
@@ -376,6 +386,8 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   }
 
   spdlog::info("*********************** Result ****************************");
+  spdlog::info("PSI intersection size      : {}",
+               recv.intersection_idxs_tmp.size());
   spdlog::info("Offline time (s)           : {:.3f} ", offline_time / 1000.0);
   spdlog::info("Online time (s)            : {:.3f} ", online_time / 1000.0);
   spdlog::info("Total communication (MB)   : {:.3f} ",
@@ -389,7 +401,8 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     recv.print_commus();
     spdlog::info("***********************************************************");
     recv.print_time();
+    spdlog::info("***********************************************************");
   }
-  spdlog::info("***********************************************************");
+
   return {online_time, total_com};
 }

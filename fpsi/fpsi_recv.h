@@ -5,6 +5,7 @@
 #include "utils/params_selects.h"
 
 #include <coproto/Socket/Socket.h>
+#include <cryptoTools/Common/BitVector.h>
 #include <cryptoTools/Common/block.h>
 #include <ipcl/bignum.h>
 #include <ipcl/ciphertext.hpp>
@@ -48,9 +49,12 @@ public:
   vector<vector<block>> get_id_encoding;
   vector<u64> fig9_ID_xr;
 
+  BitVector ee;
+
   u64 psi_ca_result = 0;
 
-  // Pre-computed datas
+  // test tmp
+  vector<u64> intersection_idxs_tmp;
 
   FPSIRecv(u64 dim, u64 delta, u64 pt_num, u64 metric, u64 thread_num,
            vector<pt> &pts, ipcl::KeyPair &fmap_recv_key,

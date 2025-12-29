@@ -21,6 +21,7 @@
 #include <ipcl/ciphertext.hpp>
 #include <ipcl/plaintext.hpp>
 #include <ipcl/utils/context.hpp>
+#include <libOTe/TwoChooseOne/Silent/SilentOtExtReceiver.h>
 #include <spdlog/spdlog.h>
 
 void FPSIRecv::DFmap_fig8_offline() {
@@ -533,13 +534,66 @@ void FPSIRecv::psi_online() {
   mp_ssFMat(simple_table);
   psi_online_timer.end("recv_ssFmat");
 
-  fpsi_timer.merge(psi_online_timer);
-
   spdlog::info("  Recv step3: mp_ssFMath finished!");
 
   /* ---------------------------------------------------------------------------*/
   // step 4: recv PSI OT
   /* ---------------------------------------------------------------------------*/
+  SilentOtExtReceiver s_ot_recv;
+  u64 numOTs = cuckoo_table.mNumBins;
+  s_ot_recv.configure(numOTs, 2, 1, SilentSecType::SemiHonest,
+                      SdNoiseDistribution::Regular, DefaultMultType);
+
+  //  gen baseOT
+  coproto::sync_wait(s_ot_recv.genBaseCors(recv_prng, sockets[0]));
+
+  std::vector<block> ot_messages(numOTs);
+
+  psi_online_timer.start();
+  // gen randomOT
+  auto proto = s_ot_recv.receive(ee, ot_messages, recv_prng, sockets[0]);
+  // auto protocol = s_ot_recv.silentReceive(ee, ot_messages, recv_prng,
+  //                                         sockets[0], OTType::Correlated);
+  cp::sync_wait(proto);
+
+  // randomOT -> OT
+  vector<block> mask_msg_0(numOTs);
+  vector<block> mask_msg_1(numOTs);
+  coproto::sync_wait(sockets[0].recv(mask_msg_0));
+  coproto::sync_wait(sockets[0].recv(mask_msg_1));
+
+  vector<u64> recvMsgs(numOTs);
+  for (u64 i = 0; i < numOTs; i++) {
+    auto tmp_blk = (ee[i]) ? (ot_messages[i] ^ mask_msg_1[i])
+                           : (ot_messages[i] ^ mask_msg_0[i]);
+    recvMsgs[i] = tmp_blk.get<u64>()[0];
+  }
+  psi_online_timer.end("recv_psi_ot");
+
+  spdlog::info("  Recv step4: recv OTs finished!");
+
+  psi_online_timer.start();
+  std::vector<std::pair<u64, u64>> find_table;
+  for (u64 i = 0; i < PTS_NUM; i++) {
+    find_table.emplace_back(fig9_ID_xr[i], i);
+  }
+  std::sort(find_table.begin(), find_table.end());
+
+  // lookup
+  vector<u64> intersection_idxs;
+  for (auto msg : recvMsgs) {
+    auto it = std::lower_bound(find_table.begin(), find_table.end(), msg,
+                               [](auto &p, u64 k) { return p.first < k; });
+
+    if (it != find_table.end() && it->first == msg) {
+      intersection_idxs.push_back(it->second);
+    }
+  }
+
+  intersection_idxs_tmp = intersection_idxs;
+  psi_online_timer.end("recv_psi_intersection");
+
+  fpsi_timer.merge(psi_online_timer);
 }
 
 void FPSIRecv::mp_ssFMat(SimpleIndex &st) {
@@ -670,7 +724,7 @@ void FPSIRecv::mp_ssFMat(SimpleIndex &st) {
 
   fmat_timer.start();
   auto e = Batch_PEQT_recv(rr_vals_sums, sockets[0]);
-  auto ee = sync_wait(e);
+  ee = sync_wait(e);
   fmat_timer.end("recv_fmat_step5_batch_peqt");
   insert_commus("recv_fmat_step5_batch_peqt", 0);
 

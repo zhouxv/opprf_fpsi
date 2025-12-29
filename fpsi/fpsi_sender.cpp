@@ -25,6 +25,7 @@
 #include <ipcl/plaintext.hpp>
 #include <ipcl/utils/context.hpp>
 #include <libOTe/Tools/Coproto.h>
+#include <libOTe/TwoChooseOne/Silent/SilentOtExtSender.h>
 #include <spdlog/spdlog.h>
 
 void FPSISender::DFmap_fig8_offline() {
@@ -499,13 +500,63 @@ void FPSISender::psi_online() {
   mp_ssFMat(cuckoo_table);
   psi_online_timer.end("sender_ssFmat");
 
-  fpsi_timer.merge(psi_online_timer);
-
   spdlog::info("  Sender step3: mp_ssFMath finished!");
 
   /* ---------------------------------------------------------------------------*/
   // step 4: sender PSI OT
   /* ---------------------------------------------------------------------------*/
+  SilentOtExtSender s_ot_sender;
+  u64 numOTs = cuckoo_table.mNumBins;
+  s_ot_sender.configure(numOTs, 2, 1, SilentSecType::SemiHonest,
+                        SdNoiseDistribution::Regular, DefaultMultType);
+
+  psi_online_timer.start();
+
+  //  gen baseOT
+  cp::sync_wait(s_ot_sender.genBaseCors({}, sender_prng, sockets[0]));
+
+  // gen randomOT
+  std::vector<std::array<block, 2>> ot_messages(numOTs);
+  auto proto = s_ot_sender.send(ot_messages, sender_prng, sockets[0]);
+  // auto protocol = s_ot_sender.silentSend(ot_messages, sender_prng,
+  // sockets[0]);
+  cp::sync_wait(proto);
+
+  // randomOT -> OT
+  vector<block> half_sendMsg_0(numOTs);
+  vector<block> half_sendMsg_1(numOTs);
+
+  for (u64 i = 0; i < numOTs; i++) {
+    auto tmp_bin = cuckoo_table.mBins[i];
+    bool empty = tmp_bin.isEmpty();
+    bool hit = ee[i];
+
+    auto m0 = ot_messages[i][0];
+    auto m1 = ot_messages[i][1];
+
+    if (empty) {
+      half_sendMsg_0[i] = sender_prng.get<block>() ^ m0;
+      half_sendMsg_1[i] = sender_prng.get<block>() ^ m1;
+    } else {
+      auto pt_blk = block(fig9_ID_ys[tmp_bin.idx()]);
+      if (hit) {
+        half_sendMsg_0[i] = pt_blk ^ m0;
+        half_sendMsg_1[i] = sender_prng.get<block>() ^ m1;
+      } else {
+        half_sendMsg_0[i] = sender_prng.get<block>() ^ m0;
+        half_sendMsg_1[i] = pt_blk ^ m1;
+      }
+    }
+  }
+
+  coproto::sync_wait(sockets[0].send(half_sendMsg_0));
+  coproto::sync_wait(sockets[0].send(half_sendMsg_1));
+  psi_online_timer.end("sender_psi_ot");
+  insert_commus("sender_psi_ot", 0);
+
+  spdlog::info("  Sender step4: sender OTs finished!");
+
+  fpsi_timer.merge(psi_online_timer);
 }
 
 template <CuckooTypes Mode> void FPSISender::mp_ssFMat(CuckooIndex<Mode> &ct) {
@@ -636,7 +687,7 @@ template <CuckooTypes Mode> void FPSISender::mp_ssFMat(CuckooIndex<Mode> &ct) {
 
   fmat_timer.start();
   auto e = Batch_PEQT_send(r_vals_sums, sockets[0]);
-  auto ee = sync_wait(e);
+  ee = sync_wait(e);
   fmat_timer.end("sender_fmat_step5_batch_peqt");
   insert_commus("sender_fmat_step5_batch_peqt", 0);
 
