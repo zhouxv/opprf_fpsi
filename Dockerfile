@@ -42,16 +42,17 @@ COPY ./shell_build_cmd.sh \
     ./CMakeLists.txt \
     ./
 
-# Copying sourcode files
+# Copy sourcode files and build executable file
 COPY ./fpsi/ ./fpsi/
 COPY ./frontend/ ./frontend/
-
 RUN chmod +x ./*.sh && \
     ./shell_build_cmd.sh
 
-COPY ./README.md ./
-COPY ./shell_run_bench_fmap.sh ./shell_run_bench_fmap.sh
-COPY ./shell_run_bench_fpsi.sh ./shell_run_bench_fpsi.sh
+# copy other files
+COPY ./README.md \
+    ./shell_run_bench_fmap.sh \
+    ./shell_run_bench_fpsi.sh \
+    ./
 
 RUN chmod +x ./*.sh
 
