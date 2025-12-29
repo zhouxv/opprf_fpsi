@@ -9,9 +9,14 @@
 #include <coproto/Socket/LocalAsyncSock.h>
 #include <cryptoTools/Common/CLP.h>
 #include <cryptoTools/Common/Defines.h>
+#include <cryptoTools/Common/Matrix.h>
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/PRNG.h>
 
+#include <cstdint>
+#include <ipcl/plaintext.hpp>
+#include <libOTe/Tools/CoeffCtx.h>
+#include <libOTe/Vole/Silent/SilentVoleSender.h>
 #include <macoro/task.h>
 #include <spdlog/spdlog.h>
 #include <vector>
@@ -20,18 +25,182 @@
 #include <ipcl/pri_key.hpp>
 #include <ipcl/pub_key.hpp>
 
-inline auto eval(macoro::task<> &t0, macoro::task<> &t1) {
-  auto r =
-      macoro::sync_wait(macoro::when_all_ready(std::move(t0), std::move(t1)));
+inline auto eval(cp::task<> &t0, cp::task<> &t1) {
+  auto r = cp::sync_wait(cp::when_all_ready(std::move(t0), std::move(t1)));
   std::get<0>(r).result();
   std::get<1>(r).result();
+}
+
+void test_opprf(const oc::CLP &cmd) {
+  auto sender_size = cmd.getOr<u64>("s", 10);
+  auto recv_size = cmd.getOr<u64>("r", 20);
+  auto col_size = cmd.getOr<u64>("c", 3);
+  auto intersection = cmd.getOr<u64>("i", 2);
+
+  volePSI::RsOpprfSender sender;
+  volePSI::RsOpprfReceiver recver;
+
+  auto sockets = coproto::LocalAsyncSocket::makePair();
+
+  PRNG prng0(block(0, 0));
+  PRNG prng1(block(0, 1));
+
+  // test non-block values
+  // test unbalance opprf (sender n, recv 2n)
+  std::vector<block> keys(sender_size);
+  std::vector<block> keys_2(recv_size);
+
+  prng0.get(keys.data(), sender_size);
+  prng1.get(keys_2.data(), recv_size);
+
+  for (u64 i = 0; i < intersection; i++) {
+    keys_2[i] = keys[i];
+  }
+
+  oc::Matrix<u64> vals(sender_size, col_size);
+  oc::Matrix<u64> recvOut(keys_2.size(), col_size);
+  prng0.get(vals.data(), sender_size * col_size);
+
+  for (u64 i = 0; i < sender_size; i++) {
+    cout << "i: " << i << " ; ";
+    for (u64 j = 0; j < col_size; j++) {
+      cout << vals[i][j] << " ";
+    }
+    cout << endl;
+  }
+
+  auto p0 = sender.send(keys_2.size(), keys, vals, prng0, 1, sockets[0]);
+  auto p1 = recver.receive(keys.size(), keys_2, recvOut, prng1, 1, sockets[1]);
+
+  eval(p0, p1);
+
+  for (u64 i = 0; i < 10; ++i) {
+    cout << "[" << i << "] recv= ";
+    for (u64 j = 0; j < col_size; j++) {
+      cout << recvOut[i][j] << " ";
+    }
+    std::cout << "; send = ";
+    for (u64 j = 0; j < col_size; j++) {
+      cout << vals[i][j] << " ";
+    }
+    cout << endl;
+  }
+}
+
+void test_pailliar(const oc::CLP &cmd) {
+  ipcl::initializeContext("QAT");
+  ipcl::setHybridMode(ipcl::HybridMode::OPTIMAL);
+  ipcl::KeyPair paillier_key = ipcl::generateKeypair(2048, true);
+  auto pk = paillier_key.pub_key;
+  auto sk = paillier_key.priv_key;
+
+  u64 count = cmd.getOr("n", 10000);
+
+  // Generate random values and zero values
+  vector<u64> zero_values(count, 0);
+  vector<u64> random_values(count, 0);
+  vector<BigNumber> random_bns(count, 0);
+  vector<BigNumber> zero_bns(count, 0);
+
+  PRNG prng(oc::sysRandomSeed());
+  prng.get(random_values.data(), random_values.size());
+
+  for (u64 i = 0; i < count; i++) {
+    random_bns[i] = BigNumber(reinterpret_cast<Ipp32u *>(&random_values[i]), 2);
+    zero_bns[i] = BigNumber(reinterpret_cast<Ipp32u *>(&zero_values[i]), 2);
+  }
+
+  tVar timer;
+
+  tStart(timer);
+  ipcl::PlainText randoms_pt = ipcl::PlainText(random_bns);
+  ipcl::PlainText pt_zero = ipcl::PlainText(zero_bns);
+  auto t1 = tEnd(timer);
+
+  tStart(timer);
+  ipcl::CipherText random_ciphers = pk.encrypt(randoms_pt);
+  auto t2 = tEnd(timer);
+
+  ipcl::PlainText random_ciphers_dec = sk.decrypt(random_ciphers);
+
+  tStart(timer);
+  ipcl::CipherText zero_ciphers = pk.encrypt(pt_zero);
+  auto t3 = tEnd(timer);
+
+  tStart(timer);
+  auto add_res = random_ciphers + zero_ciphers;
+  auto t4 = tEnd(timer);
+
+  tStart(timer);
+  auto mul_res = random_ciphers * randoms_pt;
+  auto t5 = tEnd(timer);
+
+  tStart(timer);
+  ipcl::PlainText dt_add_ctx_cty = sk.decrypt(add_res);
+  auto t6 = tEnd(timer);
+
+  ipcl::PlainText dt_mul_ctx_cty = sk.decrypt(mul_res);
+
+  spdlog::info("Paillier Encryption Test Results:");
+  spdlog::info("Plaintext Encoding Time: {} ms", t1);
+  spdlog::info("Random Values Encryption Time: {} ms", t2);
+  spdlog::info("Zero Values Encryption Time: {} ms", t3);
+  spdlog::info("Ciphertext Add Time: {} ms", t4);
+  spdlog::info("Ciphertext Mul Time: {} ms", t5);
+  spdlog::info("Decryption Time: {} ms", t6);
+
+  auto commu = add_res.getTexts().size() * 2048 / 8 / 1024;
+  spdlog::info("Communication for {} additions: {} KB", count, commu);
+
+  vector<u32> tmp;
+  random_bns[0].num2vec(tmp);
+  spdlog::info("Verifying u32 vec size: random_bns(u64) {} , plaintext {} , "
+               "ciphertext {} , random_ciphers_dec {} , dt_add_ctx_cty {} , "
+               "dt_mul_ctx_cty {}",
+               tmp.size(), randoms_pt.getElementVec(0).size(),
+               random_ciphers.getElementVec(0).size(),
+               random_ciphers_dec.getElementVec(0).size(),
+               dt_add_ctx_cty.getElementVec(0).size(),
+               dt_mul_ctx_cty.getElementVec(0).size());
+
+  ipcl::terminateContext();
+}
+
+void test_batch_peqt(const oc::CLP &cmd) {
+  u64 num = 10;
+  PRNG prng(oc::sysRandomSeed());
+  vector<block> a(num), b(num);
+
+  prng.get(a.data(), num);
+  prng.get(b.data(), num);
+  for (u64 i = 0; i < num / 2; i++) {
+    a[i] = b[i];
+  }
+
+  auto [socket0, socket1] = coproto::LocalAsyncSocket::makePair();
+
+  osuCrypto::BitVector res0, res1;
+
+  std::thread recv_thread(
+      [&]() { res0 = macoro::sync_wait(Batch_PEQT_recv(a, socket0)); });
+
+  std::thread send_thread(
+      [&]() { res1 = macoro::sync_wait(Batch_PEQT_send(b, socket1)); });
+
+  // 等待线程结束
+  recv_thread.join();
+  send_thread.join();
+
+  for (u64 i = 0; i < num; i++) {
+    spdlog::info("[{}] {} {} {} {}", i, a[i], b[i], res0[i], res1[i]);
+  }
 }
 
 /*
 Generic subfield noisy VOLE (semi-honest) [BCGIKRS19] test
 */
 template <typename F, typename G, typename Ctx>
-void Vole_Noisy_test_impl(u64 n) {
+void vole_noisy_test_impl(u64 n) {
   PRNG prng(CCBlock);
 
   F delta = prng.get();
@@ -73,140 +242,85 @@ void Vole_Noisy_test_impl(u64 n) {
   }
 }
 
-void test_opprf(const oc::CLP &cmd) {
+void test_vole_noisy(const oc::CLP &cmd) {
+  for (u64 n : {1, 8, 433}) {
+    vole_noisy_test_impl<u8, u8, CoeffCtxInteger>(n);
+    vole_noisy_test_impl<u64, u32, CoeffCtxInteger>(n);
+    vole_noisy_test_impl<block, block, CoeffCtxGF128>(n);
+    vole_noisy_test_impl<std::array<u32, 11>, u32, CoeffCtxArray<u32, 11>>(n);
+  }
+}
 
-  volePSI::RsOpprfSender sender;
-  volePSI::RsOpprfReceiver recver;
+/*
+Generic subfield noisy VOLE (semi-honest) [BCGIKRS19] test
+*/
+template <typename F, typename G, typename Ctx>
+void vole_silent_test_impl(const oc::CLP &cmd) {
 
-  auto sockets = coproto::LocalAsyncSocket::makePair();
+  auto numVole = cmd.getOr<u64>("n", 1 << 20);
 
-  u64 n = 4000;
-  PRNG prng0(block(0, 0));
-  PRNG prng1(block(0, 1));
+  // get up the networking
+  auto chl = cp::LocalAsyncSocket::makePair();
+  // get a random number generator seeded from the system
+  PRNG prng(sysRandomSeed());
 
-  std::vector<block> vals(n), out(n);
+  // the LPN compression type.
+  MultType mulType = DefaultMultType;
+  // regular noise or stationary noise.
+  SdNoiseDistribution noiseType = SdNoiseDistribution::Regular;
+  // the security type, semi-honest or malicious.
+  SilentSecType malType = SilentSecType::SemiHonest;
+  // should we use only base ots Base or a hybrid of base and extend BaseExtend.
+  SilentBaseType baseType = SilentBaseType::BaseExtend;
 
-  prng0.get(vals.data(), n);
-  prng0.get(out.data(), n);
+  SilentVoleSender<F, G> sender;
+  SilentVoleReceiver<F, G> receiver;
 
-  std::vector<block> vals_2(2 * n);
-  prng1.get(vals_2.data(), 2 * n);
-  std::vector<block> recvOut(vals_2.size());
+  Ctx ctx;
 
-  auto p0 = sender.send(vals_2.size(), vals, out, prng0, 1, sockets[0]);
-  auto p1 = recver.receive(vals.size(), vals_2, recvOut, prng1, 1, sockets[1]);
+  // 𝔽   𝔽   𝔾    𝔽
+  // A = B + C * DELTA
+  // 𝒮   ℛ   𝒮     ℛ
+  // c   d    a     b
+  AlignedUnVector<F> A(numVole);
+  AlignedUnVector<F> B(numVole);
+  AlignedUnVector<G> C(numVole);
+  F DELTA = prng.get<F>();
 
-  eval(p0, p1);
+  receiver.configure(numVole, malType, mulType, baseType, noiseType);
+  sender.configure(numVole, malType, mulType, baseType, noiseType);
 
-  u64 count = 0;
-  for (u64 i = 0; i < 10; ++i) {
-    auto v = sender.eval<block>(vals[i]);
+  auto t_s = sender.silentSend(DELTA, B, prng, chl[0]);
 
-    if (count < 10) {
-      std::cout << i << " recv= " << recvOut[i] << ", send = " << v
-                << ", send* = " << out[i] << std::endl;
-    } else {
-      break;
+  auto t_rs = receiver.silentReceive(C, A, prng, chl[1]);
+
+  eval(t_s, t_rs);
+
+  // validate the VOLE results
+  try {
+    for (u64 i = 0; i < numVole; ++i) {
+      F minus, mul, sum;
+      ctx.mul(mul, C[i], DELTA);
+      ctx.plus(sum, B[i], mul);
+      ctx.minus(minus, A[i], B[i]);
+      if (A[i] != sum) {
+        throw std::runtime_error("VOLE verification failed at " +
+                                 std::to_string(i));
+      }
+      if (i < 5) {
+        spdlog::info("VOLE[{}]: A={} B={} C={} DELTA={}, A-B={}, C*DELTA={}", i,
+                     A[i], B[i], C[i], DELTA, minus, mul);
+      }
     }
 
-    ++count;
+  } catch (const std::exception &e) {
+    spdlog::error("测试失败: {}", e.what());
   }
+
+  spdlog::info("✓ Silent VOLE 测试通过！({} 个元素)", numVole);
 }
 
-void test_Vole_Noisy(const oc::CLP &cmd) {
-  for (u64 n : {1, 8, 433}) {
-    Vole_Noisy_test_impl<u8, u8, CoeffCtxInteger>(n);
-    Vole_Noisy_test_impl<u64, u32, CoeffCtxInteger>(n);
-    Vole_Noisy_test_impl<block, block, CoeffCtxGF128>(n);
-    Vole_Noisy_test_impl<std::array<u32, 11>, u32, CoeffCtxArray<u32, 11>>(n);
-  }
-}
-
-void test_pailliar(const oc::CLP &cmd) {
-  ipcl::initializeContext("QAT");
-  ipcl::setHybridMode(ipcl::HybridMode::OPTIMAL);
-  ipcl::KeyPair paillier_key = ipcl::generateKeypair(2048, true);
-  auto pk = paillier_key.pub_key;
-  auto sk = paillier_key.priv_key;
-
-  u64 count = cmd.getOr("n", 10000);
-
-  // Generate random values and zero values
-  vector<u64> zero_values(count, 0);
-  vector<u64> random_values(count, 0);
-  vector<BigNumber> random_bns(count, 0);
-  vector<BigNumber> zero_bns(count, 0);
-
-  PRNG prng(oc::sysRandomSeed());
-  prng.get(random_values.data(), random_values.size());
-
-  for (u64 i = 0; i < count; i++) {
-    random_bns[i] = BigNumber(reinterpret_cast<Ipp32u *>(&random_values[i]), 2);
-    zero_bns[i] = BigNumber(reinterpret_cast<Ipp32u *>(&zero_values[i]), 2);
-  }
-
-  tVar timer;
-
-  tStart(timer);
-  ipcl::PlainText pt_randoms = ipcl::PlainText(random_bns);
-  ipcl::PlainText pt_zero = ipcl::PlainText(zero_bns);
-  auto t1 = tEnd(timer);
-
-  tStart(timer);
-  ipcl::CipherText random_ciphers = pk.encrypt(pt_randoms);
-  auto t2 = tEnd(timer);
-
-  tStart(timer);
-  ipcl::CipherText zero_ciphers = pk.encrypt(pt_zero);
-  auto t3 = tEnd(timer);
-
-  tStart(timer);
-  auto add_res = random_ciphers + zero_ciphers;
-  auto t4 = tEnd(timer);
-
-  tStart(timer);
-  ipcl::PlainText dt_add_ctx_cty = sk.decrypt(add_res);
-  auto t5 = tEnd(timer);
-
-  spdlog::info("Paillier Encryption Test Results:");
-  spdlog::info("Plaintext Encoding Time: {} ms", t1);
-  spdlog::info("Random Values Encryption Time: {} ms", t2);
-  spdlog::info("Zero Values Encryption Time: {} ms", t3);
-  spdlog::info("Ciphertext Addition Time: {} ms", t4);
-  spdlog::info("Decryption Time: {} ms", t5);
-
-  auto commu = add_res.getTexts().size() * 2048 / 8 / 1024;
-  spdlog::info("Communication for {} additions: {} KB", count, commu);
-
-  ipcl::terminateContext();
-}
-
-void test_batch_peqt(const oc::CLP &cmd) {
-  u64 num = 10;
-  PRNG prng(oc::sysRandomSeed());
-  vector<block> a(num), b(num);
-
-  prng.get(a.data(), num);
-  prng.get(b.data(), num);
-  for (u64 i = 0; i < num / 2; i++) {
-    a[i] = b[i];
-  }
-
-  auto [socket0, socket1] = coproto::LocalAsyncSocket::makePair();
-
-  osuCrypto::BitVector res0, res1;
-
-  std::thread recv_thread(
-      [&]() { res0 = macoro::sync_wait(Batch_PEQT_recv(a, socket0)); });
-
-  std::thread send_thread(
-      [&]() { res1 = macoro::sync_wait(Batch_PEQT_send(b, socket1)); });
-
-  // 等待线程结束
-  recv_thread.join();
-  send_thread.join();
-
-  for (u64 i = 0; i < num; i++) {
-    spdlog::info("[{}] {} {} {} {}", i, a[i], b[i], res0[i], res1[i]);
-  }
+void test_vole_slient(const oc::CLP &cmd) {
+  vole_silent_test_impl<u64, u64, CoeffCtxInteger>(cmd);
+  vole_silent_test_impl<block, block, CoeffCtxGF128>(cmd);
 }

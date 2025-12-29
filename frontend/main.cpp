@@ -52,13 +52,16 @@ int main(int argc, char **argv) {
       test_opprf(cmd);
       break;
     case 2:
-      test_Vole_Noisy(cmd);
-      break;
-    case 3:
       test_pailliar(cmd);
       break;
-    case 4:
+    case 3:
       test_batch_peqt(cmd);
+      break;
+    case 4:
+      test_vole_noisy(cmd);
+      break;
+    case 5:
+      test_vole_slient(cmd);
       break;
     default:
       spdlog::error("Unknown test type", test_type);
