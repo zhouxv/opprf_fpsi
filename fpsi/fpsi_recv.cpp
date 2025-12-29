@@ -477,7 +477,7 @@ void FPSIRecv::psi_online() {
   psi_online_timer.start();
   DFmap_fig9_online();
   psi_online_timer.end("recv_DFmap_fig9_online");
-  DFmap_fig9_clear();
+  // DFmap_fig9_clear();
   spdlog::info("  Recv step1: fmap finished!");
 
   /* ---------------------------------------------------------------------------*/
@@ -531,7 +531,7 @@ void FPSIRecv::psi_online() {
   // step 3: recv mp_ssFMat
   /* ---------------------------------------------------------------------------*/
   psi_online_timer.start();
-  mp_ssFMat(simple_table);
+  mp_ssFMat_linf(simple_table);
   psi_online_timer.end("recv_ssFmat");
 
   spdlog::info("  Recv step3: mp_ssFMath finished!");
@@ -596,7 +596,148 @@ void FPSIRecv::psi_online() {
   fpsi_timer.merge(psi_online_timer);
 }
 
-void FPSIRecv::mp_ssFMat(SimpleIndex &st) {
+void FPSIRecv::mp_ssFMat_linf(SimpleIndex &st) {
+  simpleTimer fmat_timer;
+
+  // get set_dec and set_prefix param
+  auto prefix_param = LinfParamTable::getSelectedParam(2 * DELTA + 1);
+
+  u64 bins_num = st.mNumBins;
+  auto &tmp_idxs = st.mLocations;
+
+  u64 a_random_size = bins_num * DIM;
+  vector<block> a_random(a_random_size);
+  recv_prng.get(a_random.data(), a_random_size);
+
+  oc::Matrix<block> rr_vals(DIM, bins_num, osuCrypto::AllocType::Zeroed);
+
+  auto dim_thread = [&](u64 dim_index) {
+    simpleTimer dim_thread_timer;
+    PRNG prng(oc::sysRandomSeed());
+
+    /* ---------------------------------------------------------------------------*/
+    // step 1: recv getList
+    /* ---------------------------------------------------------------------------*/
+    vector<block> prefix_keys;
+    vector<block> prefix_vals;
+    u64 opprf_size(prefix_param.second * PTS_NUM * NUM_HASH_FUNC);
+    prefix_keys.reserve(opprf_size);
+    prefix_vals.reserve(opprf_size);
+
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+    for (u64 i = 0; i < PTS_NUM; i++) {
+      auto prefixs = set_dec(pts[i][dim_index] - DELTA,
+                             pts[i][dim_index] + DELTA, prefix_param.first);
+      for (auto prefix : prefixs) {
+        for (u64 k = 0; k < NUM_HASH_FUNC; k++) {
+          block hash_out;
+          u64 bin_idx = tmp_idxs[i][k];
+          blake3_hasher_update(&hasher, prefix.data(), prefix.size());
+          blake3_hasher_update(&hasher, &fig9_ID_xr[i], sizeof(u64));
+          blake3_hasher_update(&hasher, &k, sizeof(u64));
+          blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+          blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+          blake3_hasher_reset(&hasher);
+          prefix_keys.push_back(hash_out);
+          prefix_vals.push_back(a_random[dim_index * bins_num + bin_idx]);
+        }
+      }
+    }
+
+    // spdlog::debug("\t[recv] mp_ssFMat thread [{}] —— keys size: {} , value "
+    //               "size : {}; expect size : {} ",
+    //               dim_index, prefix_keys.size(), prefix_vals.size(),
+    //               opprf_size);
+
+    padding_keys(prefix_keys, opprf_size);
+    padding_keys(prefix_vals, opprf_size);
+
+    if (dim_index == 0)
+      spdlog::info("\t[recv] mp_ssFMat thread [{}] —— step1 getlist finished!",
+                   dim_index);
+
+    /* ---------------------------------------------------------------------------*/
+    // step 3: bOPPRF RsOpprfSender
+    /* ---------------------------------------------------------------------------*/
+    u64 opprf_size_other;
+    coproto::sync_wait(sockets[dim_index].send(opprf_size));
+    coproto::sync_wait(sockets[dim_index].recv(opprf_size_other));
+
+    RsOpprfSender opprf_sender;
+
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_sender.send(opprf_size_other, prefix_keys,
+                                         prefix_vals, prng, 1,
+                                         sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_step3_opprf", dim_index));
+    insert_commus(fmt::format("recv_{}_fmat_step3", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::info(
+          "\t[recv] mp_ssFMat thread [{}] —— step3 RsOpprfSender finished!",
+          dim_index);
+
+    /* ---------------------------------------------------------------------------*/
+    // step 4: bOPPRF RsOpprfReceiver
+    /* ---------------------------------------------------------------------------*/
+    RsOpprfReceiver opprf_recv;
+
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_recv.receive(
+        opprf_size_other,
+        coproto::span<block>(a_random.data() + bins_num * dim_index, bins_num),
+        rr_vals[dim_index], prng, 1, sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_step4_opprf", dim_index));
+
+    insert_commus(fmt::format("recv_{}_fmat_step4", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::info(
+          "\t[recv] mp_ssFMat thread [{}] —— step4 RsOpprfReceiver finished!",
+          dim_index);
+
+    fpsi_timer.merge(dim_thread_timer);
+  };
+
+  vector<thread> dim_threads;
+  fmat_timer.start();
+  // start dim threads
+  for (u64 t = 0; t < DIM; t++) {
+    dim_threads.emplace_back(dim_thread, t);
+  }
+
+  // wait for getList threads
+  for (auto &th : dim_threads) {
+    th.join();
+  }
+
+  /* ---------------------------------------------------------------------------*/
+  // step 5: recv ssPEQT
+  /* ---------------------------------------------------------------------------*/
+  vector<block> rr_vals_sums(bins_num, ZeroBlock);
+  for (u64 i = 0; i < rr_vals_sums.size(); i++) {
+    for (u64 j = 0; j < DIM; j++) {
+      rr_vals_sums[i] ^= rr_vals[j][i];
+    }
+  }
+
+  fmat_timer.start();
+  auto e = Batch_PEQT_recv(rr_vals_sums, sockets[0]);
+  ee = sync_wait(e);
+  fmat_timer.end("recv_fmat_step5_batch_peqt");
+  insert_commus("recv_fmat_step5_batch_peqt", 0);
+
+  // for (u64 i = 0; i < 10; i++) {
+  //   spdlog::debug("recv bins[{}] {} {}", i, rr_vals_sums[i], ee[i]);
+  // }
+
+  fmat_timer.end("recv_fmat_threads_all");
+
+  fpsi_timer.merge(fmat_timer);
+}
+
+void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
   simpleTimer fmat_timer;
 
   // get set_dec and set_prefix param

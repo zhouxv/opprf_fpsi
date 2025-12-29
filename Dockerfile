@@ -51,6 +51,7 @@ RUN chmod +x ./*.sh && \
 
 COPY ./README.md ./
 COPY ./shell_run_bench_fmap.sh ./shell_run_bench_fmap.sh
+COPY ./shell_run_bench_fpsi.sh ./shell_run_bench_fpsi.sh
 
 RUN chmod +x ./*.sh
 

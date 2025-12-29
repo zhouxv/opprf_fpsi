@@ -74,7 +74,8 @@ public:
   void psi_offline_fake();
   void psi_online();
 
-  template <CuckooTypes Mode> void mp_ssFMat(CuckooIndex<Mode> &ct);
+  template <CuckooTypes Mode> void mp_ssFMat_linf(CuckooIndex<Mode> &ct);
+  template <CuckooTypes Mode> void mp_ssFMat_lp(CuckooIndex<Mode> &ct);
 
   void DFmap_fig9_clear() {
     IDs.clear();

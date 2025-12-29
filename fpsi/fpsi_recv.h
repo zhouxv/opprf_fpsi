@@ -51,8 +51,6 @@ public:
 
   BitVector ee;
 
-  u64 psi_ca_result = 0;
-
   // test tmp
   vector<u64> intersection_idxs_tmp;
 
@@ -82,7 +80,8 @@ public:
   void psi_offline_fake();
   void psi_online();
 
-  void mp_ssFMat(SimpleIndex &st);
+  void mp_ssFMat_linf(SimpleIndex &st);
+  void mp_ssFMat_lp(SimpleIndex &st);
 
   void DFmap_fig9_clear() {
     IDs.clear();

@@ -425,7 +425,7 @@ void FPSISender::DFmap_fig9_online() {
   spdlog::debug("\t[send] fig9_ID_xr computed finished");
 
   // final clean up
-  DFmap_fig9_clear();
+  // DFmap_fig9_clear();
 }
 
 void FPSISender::psi_offline() {
@@ -450,7 +450,7 @@ void FPSISender::psi_online() {
   psi_online_timer.start();
   DFmap_fig9_online();
   psi_online_timer.end("sender_DFmap_fig9_online");
-  DFmap_fig9_clear();
+  // DFmap_fig9_clear();
 
   spdlog::info("  Sender step1: fmap finished!");
 
@@ -497,7 +497,7 @@ void FPSISender::psi_online() {
   // step 3: sender mp_ssFMat
   /* ---------------------------------------------------------------------------*/
   psi_online_timer.start();
-  mp_ssFMat(cuckoo_table);
+  mp_ssFMat_linf(cuckoo_table);
   psi_online_timer.end("sender_ssFmat");
 
   spdlog::info("  Sender step3: mp_ssFMath finished!");
@@ -559,7 +559,150 @@ void FPSISender::psi_online() {
   fpsi_timer.merge(psi_online_timer);
 }
 
-template <CuckooTypes Mode> void FPSISender::mp_ssFMat(CuckooIndex<Mode> &ct) {
+template <CuckooTypes Mode>
+void FPSISender::mp_ssFMat_linf(CuckooIndex<Mode> &ct) {
+  simpleTimer fmat_timer;
+
+  // get set_dec and set_prefix param
+  auto prefix_param = LinfParamTable::getSelectedParam(2 * DELTA + 1);
+  u64 bins_num = ct.mNumBins;
+
+  vector<block> r_vals(bins_num * DIM);
+  sender_prng.get(r_vals.data(), bins_num * DIM);
+  u64 prefix_size = prefix_param.first.size();
+
+  auto dim_thread = [&](u64 dim_index) {
+    simpleTimer dim_thread_timer;
+    PRNG prng(oc::sysRandomSeed());
+
+    /* ---------------------------------------------------------------------------*/
+    // step 2: send set_prefix
+    /* ---------------------------------------------------------------------------*/
+    vector<block> prefix_keys;
+    u64 keys_size = prefix_size * bins_num;
+    prefix_keys.reserve(keys_size);
+
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+    for (u64 i = 0; i < bins_num; i++) {
+
+      if (ct.mBins[i].isEmpty()) {
+        // for empty bin
+        for (u64 j = 0; j < prefix_size; j++) {
+          prefix_keys.push_back(prng.get<block>());
+        }
+      } else {
+        auto tmp_bin = ct.mBins[i];
+        u64 idx = tmp_bin.idx();
+        u64 hash_idx = tmp_bin.hashIdx();
+        auto prefixs = set_prefix(pts[idx][dim_index], prefix_param.first);
+        for (auto prefix : prefixs) {
+          block hash_out;
+          blake3_hasher_update(&hasher, prefix.data(), prefix.size());
+          blake3_hasher_update(&hasher, &fig9_ID_ys[idx], sizeof(u64));
+          blake3_hasher_update(&hasher, &hash_idx, sizeof(u64));
+          blake3_hasher_update(&hasher, &i, sizeof(u64));
+          blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+          blake3_hasher_reset(&hasher);
+          prefix_keys.push_back(hash_out);
+        }
+      }
+    }
+
+    // spdlog::debug(
+    //     "\t[send] mp_ssFMat thread [{}] —— keys size: {} ; expect size:
+    //     {}", dim_index, keys.size(), keys_size);
+
+    if (dim_index == 0)
+      spdlog::info(
+          "\t[send] mp_ssFMat thread [{}] —— step2 set_prefix finished!",
+          dim_index);
+
+    /* ---------------------------------------------------------------------------*/
+    // step 3: bOPPRF RsOpprfReceiver
+    /* ---------------------------------------------------------------------------*/
+    u64 opprf_size_other;
+    coproto::sync_wait(sockets[dim_index].recv(opprf_size_other));
+    coproto::sync_wait(sockets[dim_index].send(keys_size));
+
+    RsOpprfReceiver opprf_recv;
+    vector<block> u(keys_size);
+
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_recv.receive(opprf_size_other, prefix_keys, u,
+                                          prng, 1, sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("sender_{}_fmat_step3_opprf", dim_index));
+    insert_commus(fmt::format("sender_{}_fmat_step3", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::info("\t[send] mp_ssFMat thread [{}] —— step3 "
+                   "RsOpprfReceiver finished!",
+                   dim_index);
+
+    /* ---------------------------------------------------------------------------*/
+    // step 4: bOPPRF RsOpprfSender
+    /* ---------------------------------------------------------------------------*/
+    RsOpprfSender opprf_sender;
+    vector<block> r_vals_(keys_size);
+    for (u64 i = 0; i < bins_num; i++) {
+      for (u64 j = 0; j < prefix_size; j++) {
+        r_vals_[i * prefix_size + j] = r_vals[dim_index * bins_num + i];
+      }
+    }
+
+    dim_thread_timer.start();
+    coproto::sync_wait(
+        opprf_sender.send(bins_num, u, r_vals_, prng, 1, sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("sender_{}_fmat_step4_opprf", dim_index));
+    insert_commus(fmt::format("sender_{}_fmat_step4", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::info(
+          "\t[send] mp_ssFMat thread [{}] —— step4 RsOpprfSender finished!",
+          dim_index);
+
+    fpsi_timer.merge(dim_thread_timer);
+  };
+
+  vector<thread> dim_threads;
+  fmat_timer.start();
+  // start dim threads
+  for (u64 t = 0; t < DIM; t++) {
+    dim_threads.emplace_back(dim_thread, t);
+  }
+
+  // wait for dim threads
+  for (auto &th : dim_threads) {
+    th.join();
+  }
+
+  /* ---------------------------------------------------------------------------*/
+  // step 5: sender ssPEQT
+  /* ---------------------------------------------------------------------------*/
+  vector<block> r_vals_sums(bins_num, ZeroBlock);
+  for (u64 i = 0; i < r_vals_sums.size(); i++) {
+    for (u64 j = 0; j < DIM; j++) {
+      r_vals_sums[i] ^= r_vals[j * bins_num + i];
+    }
+  }
+
+  fmat_timer.start();
+  auto e = Batch_PEQT_send(r_vals_sums, sockets[0]);
+  ee = sync_wait(e);
+  fmat_timer.end("sender_fmat_step5_batch_peqt");
+  insert_commus("sender_fmat_step5_batch_peqt", 0);
+
+  // for (u64 i = 0; i < 10; i++) {
+  //   spdlog::debug("send bins[{}] {} {}", i, r_vals_sums[i], ee[i]);
+  // }
+
+  fmat_timer.end("sender_fmat_threads_all");
+
+  fpsi_timer.merge(fmat_timer);
+}
+
+template <CuckooTypes Mode>
+void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
   simpleTimer fmat_timer;
 
   // get set_dec and set_prefix param
