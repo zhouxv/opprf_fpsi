@@ -98,6 +98,15 @@ void FPSIRecv::DFmap_fig8_online() {
   spdlog::debug("recv fig8 ids size: {}", fig8_ID_xr.size());
 }
 
+/*
+For avoiding value overflow, we use the following method to compute IDs:
+1. random_values is u32 type (recv_prng.get<u32>() >> bits_num).
+IDs is u64 type. ID is the sum of DIM random_values.
+2. fm_mask_mul0(u64) fm_mask(u32), fm_mask_mul0[i] = fm_mask[0] * fm_mask[i+1].
+3. u=(v+ID)*fm_mask_mul0. The computation will not overflow since BigNumber.
+(max value 2^96)
+4. w = u * mask[0]. (max value 2^128)
+*/
 void FPSIRecv::getID() {
   simpleTimer get_id_timer;
 
@@ -107,18 +116,18 @@ void FPSIRecv::getID() {
   ipcl::setHybridMode(ipcl::HybridMode::OPTIMAL);
 
   // computes random numbers
-  vector<u64> random_values(PTS_NUM * DIM, 0);
-  vector<BigNumber> random_values_bns(PTS_NUM * DIM, 0);
+  vector<u32> random_values(PTS_NUM * DIM, 0);
+  // vector<BigNumber> random_values_bns(PTS_NUM * DIM, 0);
 
-  auto bits_num = (DIM <= 1) ? 0 : std::bit_width(DIM - 1);
+  auto bits_num = (DIM <= 1) ? 1 : std::bit_width(DIM - 1);
   for (u64 i = 0; i < PTS_NUM * DIM; i++) {
     random_values[i] = recv_prng.get<u32>() >> bits_num;
-    random_values_bns[i] =
-        BigNumber(reinterpret_cast<Ipp32u *>(&random_values[i]), 2);
+    // random_values_bns[i] =
+    //     BigNumber(reinterpret_cast<Ipp32u *>(&random_values[i]), 2);
   }
 
   get_id_timer.start();
-  ipcl::PlainText randoms_pt = ipcl::PlainText(random_values_bns);
+  ipcl::PlainText randoms_pt = ipcl::PlainText(random_values);
   ipcl::CipherText random_ciphers = fmap_recv_key.pub_key.encrypt(randoms_pt);
   get_id_timer.end("recv_getid_random_enc");
   ipcl::terminateContext();
