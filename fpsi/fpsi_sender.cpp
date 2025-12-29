@@ -26,6 +26,7 @@
 #include <ipcl/utils/context.hpp>
 #include <libOTe/Tools/Coproto.h>
 #include <libOTe/TwoChooseOne/Silent/SilentOtExtSender.h>
+#include <libOTe/Vole/Silent/SilentVoleSender.h>
 #include <spdlog/spdlog.h>
 
 void FPSISender::DFmap_fig8_offline() {
@@ -430,7 +431,9 @@ void FPSISender::DFmap_fig9_online() {
 
 void FPSISender::psi_offline() {
   simpleTimer psi_offline_timer;
+  psi_offline_timer.start();
   DFmap_fig9_offline();
+  psi_offline_timer.end("send_offline_fmap");
 
   fpsi_timer.merge(psi_offline_timer);
 }
@@ -497,7 +500,12 @@ void FPSISender::psi_online() {
   // step 3: sender mp_ssFMat
   /* ---------------------------------------------------------------------------*/
   psi_online_timer.start();
-  mp_ssFMat_linf(cuckoo_table);
+
+  if (METRIC == 0) {
+    mp_ssFMat_linf(cuckoo_table);
+  } else {
+    mp_ssFMat_lp(cuckoo_table);
+  }
   psi_online_timer.end("sender_ssFmat");
 
   spdlog::info("  Sender step3: mp_ssFMath finished!");

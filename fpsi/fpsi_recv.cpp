@@ -456,7 +456,9 @@ void FPSIRecv::DFmap_fig9_online() {
 
 void FPSIRecv::psi_offline() {
   simpleTimer psi_offline_timer;
+  psi_offline_timer.start();
   DFmap_fig9_offline();
+  psi_offline_timer.end("recv_offline_fmap");
 
   fpsi_timer.merge(psi_offline_timer);
 }
@@ -531,7 +533,11 @@ void FPSIRecv::psi_online() {
   // step 3: recv mp_ssFMat
   /* ---------------------------------------------------------------------------*/
   psi_online_timer.start();
-  mp_ssFMat_linf(simple_table);
+  if (METRIC == 0) {
+    mp_ssFMat_linf(simple_table);
+  } else {
+    mp_ssFMat_lp(simple_table);
+  }
   psi_online_timer.end("recv_ssFmat");
 
   spdlog::info("  Recv step3: mp_ssFMath finished!");
