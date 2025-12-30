@@ -28,6 +28,7 @@
 #include <libOTe/TwoChooseOne/Silent/SilentOtExtSender.h>
 #include <libOTe/Vole/Silent/SilentVoleSender.h>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 void FPSISender::DFmap_fig8_offline() {
   auto t = DELTA * 2 + 1;
@@ -277,16 +278,19 @@ void FPSISender::DFmap_fig9_offline_fake() {
   fm_mask.resize(PTS_NUM + 1, 0);
   prng.get(fm_mask.data(), fm_mask.size());
 
-  vector<BigNumber> IDs_bn(PTS_NUM);
-
   vector<u64> fm_mask_mul0(PTS_NUM, 0);
   vector<BigNumber> fm_mask_mul0_bn(PTS_NUM);
   prng.get(fm_mask_mul0.data(), fm_mask_mul0.size());
 
+  vector<BigNumber> IDs_bn(PTS_NUM);
+
+  vector<u32> cipher_vecu32(128);
   for (u64 i = 0; i < PTS_NUM; i++) {
+    prng.get(cipher_vecu32.data(), 128);
     fm_mask_mul0_bn[i] =
         BigNumber(reinterpret_cast<Ipp32u *>(&fm_mask_mul0[i]), 2);
-    IDs_bn[i] = BigNumber(reinterpret_cast<Ipp32u *>(&IDs[i]), 2);
+    IDs_bn[i] =
+        BigNumber(reinterpret_cast<Ipp32u *>(cipher_vecu32.data()), 128);
   }
 
   ipcl::initializeContext("QAT");
@@ -714,102 +718,107 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
   simpleTimer fmat_timer;
 
   // get set_dec and set_prefix param
-  auto prefix_param = LinfParamTable::getSelectedParam(2 * DELTA + 1);
+  auto delta_plus_param = LpParamTable::getSelectedParam(DELTA + 1);
+  auto delta_param = LpParamTable::getSelectedParam(DELTA);
+
   u64 bins_num = ct.mNumBins;
 
-  vector<block> r_vals(bins_num * DIM);
-  sender_prng.get(r_vals.data(), bins_num * DIM);
-  u64 prefix_size = prefix_param.first.size();
+  // vector<block> r_vals(bins_num * DIM);
+  // sender_prng.get(r_vals.data(), bins_num * DIM);
+  // u64 prefix_size = prefix_param.first.size();
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    //   PRNG prng(oc::sysRandomSeed());
 
-    /* ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------*/
     // step 2: send set_prefix
-    /* ---------------------------------------------------------------------------*/
-    vector<block> prefix_keys;
-    u64 keys_size = prefix_size * bins_num;
-    prefix_keys.reserve(keys_size);
+    /*---------------------------------------------------------------------------*/
+    //   vector<block> prefix_keys;
+    //   u64 keys_size = prefix_size * bins_num;
+    //   prefix_keys.reserve(keys_size);
 
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
-    for (u64 i = 0; i < bins_num; i++) {
+    //   blake3_hasher hasher;
+    //   blake3_hasher_init(&hasher);
+    //   for (u64 i = 0; i < bins_num; i++) {
 
-      if (ct.mBins[i].isEmpty()) {
-        // for empty bin
-        for (u64 j = 0; j < prefix_size; j++) {
-          prefix_keys.push_back(prng.get<block>());
-        }
-      } else {
-        auto tmp_bin = ct.mBins[i];
-        u64 idx = tmp_bin.idx();
-        u64 hash_idx = tmp_bin.hashIdx();
-        auto prefixs = set_prefix(pts[idx][dim_index], prefix_param.first);
-        for (auto prefix : prefixs) {
-          block hash_out;
-          blake3_hasher_update(&hasher, prefix.data(), prefix.size());
-          blake3_hasher_update(&hasher, &fig9_ID_ys[idx], sizeof(u64));
-          blake3_hasher_update(&hasher, &hash_idx, sizeof(u64));
-          blake3_hasher_update(&hasher, &i, sizeof(u64));
-          blake3_hasher_finalize(&hasher, hash_out.data(), 16);
-          blake3_hasher_reset(&hasher);
-          prefix_keys.push_back(hash_out);
-        }
-      }
-    }
+    //     if (ct.mBins[i].isEmpty()) {
+    //       // for empty bin
+    //       for (u64 j = 0; j < prefix_size; j++) {
+    //         prefix_keys.push_back(prng.get<block>());
+    //       }
+    //     } else {
+    //       auto tmp_bin = ct.mBins[i];
+    //       u64 idx = tmp_bin.idx();
+    //       u64 hash_idx = tmp_bin.hashIdx();
+    //       auto prefixs = set_prefix(pts[idx][dim_index], prefix_param.first);
+    //       for (auto prefix : prefixs) {
+    //         block hash_out;
+    //         blake3_hasher_update(&hasher, prefix.data(), prefix.size());
+    //         blake3_hasher_update(&hasher, &fig9_ID_ys[idx], sizeof(u64));
+    //         blake3_hasher_update(&hasher, &hash_idx, sizeof(u64));
+    //         blake3_hasher_update(&hasher, &i, sizeof(u64));
+    //         blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+    //         blake3_hasher_reset(&hasher);
+    //         prefix_keys.push_back(hash_out);
+    //       }
+    //     }
+    //   }
 
-    // spdlog::debug(
-    //     "\t[send] mp_ssFMat thread [{}] —— keys size: {} ; expect size:
-    //     {}", dim_index, keys.size(), keys_size);
+    //   // spdlog::debug(
+    //   //     "\t[send] mp_ssFMat thread [{}] —— keys size: {} ; expect size:
+    //   //     {}", dim_index, keys.size(), keys_size);
 
-    if (dim_index == 0)
-      spdlog::info(
-          "\t[send] mp_ssFMat thread [{}] —— step2 set_prefix finished!",
-          dim_index);
+    //   if (dim_index == 0)
+    //     spdlog::info(
+    //         "\t[send] mp_ssFMat thread [{}] —— step2 set_prefix finished!",
+    //         dim_index);
 
-    /* ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------*/
     // step 3: bOPPRF RsOpprfReceiver
-    /* ---------------------------------------------------------------------------*/
-    u64 opprf_size_other;
-    coproto::sync_wait(sockets[dim_index].recv(opprf_size_other));
-    coproto::sync_wait(sockets[dim_index].send(keys_size));
+    /*---------------------------------------------------------------------------*/
+    //   u64 opprf_size_other;
+    //   coproto::sync_wait(sockets[dim_index].recv(opprf_size_other));
+    //   coproto::sync_wait(sockets[dim_index].send(keys_size));
 
-    RsOpprfReceiver opprf_recv;
-    vector<block> u(keys_size);
+    //   RsOpprfReceiver opprf_recv;
+    //   vector<block> u(keys_size);
 
-    dim_thread_timer.start();
-    coproto::sync_wait(opprf_recv.receive(opprf_size_other, prefix_keys, u,
-                                          prng, 1, sockets[dim_index]));
-    dim_thread_timer.end(fmt::format("sender_{}_fmat_step3_opprf", dim_index));
-    insert_commus(fmt::format("sender_{}_fmat_step3", dim_index), dim_index);
+    //   dim_thread_timer.start();
+    //   coproto::sync_wait(opprf_recv.receive(opprf_size_other, prefix_keys, u,
+    //                                         prng, 1, sockets[dim_index]));
+    //   dim_thread_timer.end(fmt::format("sender_{}_fmat_step3_opprf",
+    //   dim_index)); insert_commus(fmt::format("sender_{}_fmat_step3",
+    //   dim_index), dim_index);
 
-    if (dim_index == 0)
-      spdlog::info("\t[send] mp_ssFMat thread [{}] —— step3 "
-                   "RsOpprfReceiver finished!",
-                   dim_index);
+    //   if (dim_index == 0)
+    //     spdlog::info("\t[send] mp_ssFMat thread [{}] —— step3 "
+    //                  "RsOpprfReceiver finished!",
+    //                  dim_index);
 
-    /* ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------*/
     // step 4: bOPPRF RsOpprfSender
-    /* ---------------------------------------------------------------------------*/
-    RsOpprfSender opprf_sender;
-    vector<block> r_vals_(keys_size);
-    for (u64 i = 0; i < bins_num; i++) {
-      for (u64 j = 0; j < prefix_size; j++) {
-        r_vals_[i * prefix_size + j] = r_vals[dim_index * bins_num + i];
-      }
-    }
+    /*---------------------------------------------------------------------------*/
+    //   RsOpprfSender opprf_sender;
+    //   vector<block> r_vals_(keys_size);
+    //   for (u64 i = 0; i < bins_num; i++) {
+    //     for (u64 j = 0; j < prefix_size; j++) {
+    //       r_vals_[i * prefix_size + j] = r_vals[dim_index * bins_num + i];
+    //     }
+    //   }
 
-    dim_thread_timer.start();
-    coproto::sync_wait(
-        opprf_sender.send(bins_num, u, r_vals_, prng, 1, sockets[dim_index]));
-    dim_thread_timer.end(fmt::format("sender_{}_fmat_step4_opprf", dim_index));
-    insert_commus(fmt::format("sender_{}_fmat_step4", dim_index), dim_index);
+    //   dim_thread_timer.start();
+    //   coproto::sync_wait(
+    //       opprf_sender.send(bins_num, u, r_vals_, prng, 1,
+    //       sockets[dim_index]));
+    //   dim_thread_timer.end(fmt::format("sender_{}_fmat_step4_opprf",
+    //   dim_index)); insert_commus(fmt::format("sender_{}_fmat_step4",
+    //   dim_index), dim_index);
 
-    if (dim_index == 0)
-      spdlog::info(
-          "\t[send] mp_ssFMat thread [{}] —— step4 RsOpprfSender finished!",
-          dim_index);
+    //   if (dim_index == 0)
+    //     spdlog::info(
+    //         "\t[send] mp_ssFMat thread [{}] —— step4 RsOpprfSender
+    //         finished!", dim_index);
 
     fpsi_timer.merge(dim_thread_timer);
   };
@@ -826,27 +835,27 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
     th.join();
   }
 
-  /* ---------------------------------------------------------------------------*/
+  /*---------------------------------------------------------------------------*/
   // step 5: sender ssPEQT
-  /* ---------------------------------------------------------------------------*/
-  vector<block> r_vals_sums(bins_num, ZeroBlock);
-  for (u64 i = 0; i < r_vals_sums.size(); i++) {
-    for (u64 j = 0; j < DIM; j++) {
-      r_vals_sums[i] ^= r_vals[j * bins_num + i];
-    }
-  }
-
-  fmat_timer.start();
-  auto e = Batch_PEQT_send(r_vals_sums, sockets[0]);
-  ee = sync_wait(e);
-  fmat_timer.end("sender_fmat_step5_batch_peqt");
-  insert_commus("sender_fmat_step5_batch_peqt", 0);
-
-  // for (u64 i = 0; i < 10; i++) {
-  //   spdlog::debug("send bins[{}] {} {}", i, r_vals_sums[i], ee[i]);
+  /*---------------------------------------------------------------------------*/
+  // vector<block> r_vals_sums(bins_num, ZeroBlock);
+  // for (u64 i = 0; i < r_vals_sums.size(); i++) {
+  //   for (u64 j = 0; j < DIM; j++) {
+  //     r_vals_sums[i] ^= r_vals[j * bins_num + i];
+  //   }
   // }
 
-  fmat_timer.end("sender_fmat_threads_all");
+  // fmat_timer.start();
+  // auto e = Batch_PEQT_send(r_vals_sums, sockets[0]);
+  // ee = sync_wait(e);
+  // fmat_timer.end("sender_fmat_step5_batch_peqt");
+  // insert_commus("sender_fmat_step5_batch_peqt", 0);
+
+  // // for (u64 i = 0; i < 10; i++) {
+  // //   spdlog::debug("send bins[{}] {} {}", i, r_vals_sums[i], ee[i]);
+  // // }
+
+  // fmat_timer.end("sender_fmat_threads_all");
 
   fpsi_timer.merge(fmat_timer);
 }
