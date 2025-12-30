@@ -147,3 +147,17 @@ vector<string> set_prefix(u64 value, const set<u64> &u_set) {
 
   return prefixes;
 }
+
+/// Pad with 1s at the lower bits
+u64 up_bound(const string &prefix) {
+  string temp_str = prefix;
+  temp_str.append(NUM_BITS - prefix.length(), '1');
+  return bitset<NUM_BITS>(temp_str).to_ullong();
+}
+
+/// Pad with 0s at the lower bits
+u64 low_bound(const string &prefix) {
+  string temp_str = prefix;
+  temp_str.append(NUM_BITS - prefix.length(), '0');
+  return bitset<NUM_BITS>(temp_str).to_ullong();
+}
