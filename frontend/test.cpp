@@ -4,6 +4,8 @@
 #include "opprf/Defines.h"
 #include "opprf/Opprf.h"
 #include "pis_new/batch_peqt.h"
+#include "utils/params_selects.h"
+#include "utils/set_dec.h"
 #include "utils/simpleTimer.h"
 
 #include <coproto/Socket/LocalAsyncSock.h>
@@ -18,6 +20,7 @@
 #include <libOTe/Tools/CoeffCtx.h>
 #include <libOTe/Vole/Silent/SilentVoleSender.h>
 #include <macoro/task.h>
+#include <map>
 #include <spdlog/spdlog.h>
 #include <vector>
 
@@ -323,4 +326,46 @@ void vole_silent_test_impl(const oc::CLP &cmd) {
 void test_vole_slient(const oc::CLP &cmd) {
   vole_silent_test_impl<u64, u64, CoeffCtxInteger>(cmd);
   vole_silent_test_impl<block, block, CoeffCtxGF128>(cmd);
+}
+
+void test_prefix_param_lp(const oc::CLP &cmd) {
+  const vector<u64> deltas = cmd.getManyOr<u64>("deltas", {30, 60, 120, 250});
+  const u64 trait = cmd.getOr<u64>("i", 1 << 28);
+
+  map<u64, PrefixParam> params;
+  params[10] = {{0, 1}, 6};
+  params[11] = {{0, 2}, 5};
+  params[30] = {{0, 2}, 12};
+  params[31] = {{0, 2}, 10};
+  params[60] = {{0, 3}, 18};
+  params[61] = {{0, 3}, 19};
+  params[120] = {{0, 3}, 22};
+  params[121] = {{0, 3}, 23};
+  params[250] = {{0, 3}, 40};
+  params[251] = {{0, 3}, 31};
+
+  std::map<u64, u64> map;
+  PRNG prng(oc::sysRandomSeed());
+
+  for (auto delta : deltas) {
+    for (u64 j = 0; j < trait; j++) {
+      auto param = params[delta];
+      auto param_plus = params[delta + 1];
+      u64 val = (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 3 * delta) +
+                1.5 * delta;
+
+      auto prefixs0 = set_dec(val - delta, val, param_plus.first);
+      auto prefixs1 = set_dec(val + 1, val + delta, param.first);
+
+      if (map[delta + 1] < prefixs0.size())
+        map[delta + 1] = prefixs0.size();
+      if (map[delta] < prefixs1.size())
+        map[delta] = prefixs1.size();
+    }
+  }
+
+  // 输出map，按照key的大小排序
+  for (const auto &kv : map) {
+    spdlog::info("delta: {}, count: {}", kv.first, kv.second);
+  }
 }
