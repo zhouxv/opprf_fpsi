@@ -15,6 +15,6 @@ trap 'cleanup' INT TERM EXIT
 
 printf "[ProType] [Size] [Metric] [Dim] [Delta] [Time(s)] [Com.(MB)]\n"
 
-./build/main -p 1 -n 8 12 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 10 -log 0 -fm_old
+./build/main -p 1 -n 8 12 16 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 5 -log 0 -fm_old
 
-./build/main -p 1 -n 8 12 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 10 -log 0
+./build/main -p 1 -n 8 12 16 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 5 -log 0

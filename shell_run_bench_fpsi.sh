@@ -17,14 +17,17 @@ trap 'cleanup' INT TERM EXIT
 ns=(8 12 16)
 dims=(2 6 10 15)
 deltas=(10 60 250)
+metrics=(0 1 2)
 
 printf "[ProType] [Size] [Metric] [Dim] [Delta] [Time(s)] [Com.(MB)]\n"
 
-for n in "${ns[@]}"; do
-  for dim in "${dims[@]}"; do
-    for delta in "${deltas[@]}"; do
-      ./build/main -p 2 -trait 3 -log 0 -i 11 -d $dim -delta $delta -n $n -fake
+for m in "${metrics[@]}"; do
+  for n in "${ns[@]}"; do
+    for dim in "${dims[@]}"; do
+      for delta in "${deltas[@]}"; do
+        ./build/main -p 2 -trait 3 -log 0 -i 11 -d $dim -delta $delta -n $n -m $m -fake
+      done
+      echo
     done
-    echo
   done
 done

@@ -76,14 +76,14 @@ void run_fmap_protocol(const CLP &cmd) {
           if (fm_old) {
             cout << std::format("[fig8_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  "
                                 "{:^10.3f}  {:^10.3f}",
-                                set_size, metric, dim, delta, avg_online_time,
-                                avg_com)
+                                set_size, metric, dim, delta, avg_com,
+                                avg_online_time)
                  << endl;
           } else {
             cout << std::format("[fig9_fmap]  {:^5}  𝐿{}  {:^5}  {:^5}  "
                                 "{:^10.3f}  {:^10.3f}",
-                                set_size, metric, dim, delta, avg_online_time,
-                                avg_com)
+                                set_size, metric, dim, delta, avg_com,
+                                avg_online_time)
                  << endl;
           }
         }
@@ -234,10 +234,10 @@ void run_fpsi_protocol(const CLP &cmd) {
   run fpsi protocol
   */
   // obtain protocol parameters
-  const vector<u64> nums = cmd.getManyOr<u64>("n", {8});
-  const vector<u64> dims = cmd.getManyOr<u64>("d", {2});
-  const vector<u64> metrics = cmd.getManyOr<u64>("m", {0});
-  const vector<u64> deltas = cmd.getManyOr<u64>("delta", {10});
+  const u64 num = cmd.getOr<u64>("n", 8);
+  const u64 dim = cmd.getOr<u64>("d", 2);
+  const u64 metric = cmd.getOr<u64>("m", 0);
+  const u64 delta = cmd.getOr<u64>("delta", 10);
   const u64 intersection_size = cmd.getOr("i", 15);
   const u64 trait = cmd.getOr("trait", 3);
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
@@ -248,57 +248,47 @@ void run_fpsi_protocol(const CLP &cmd) {
   const bool fake = cmd.isSet("fake");
 
   // run fmap protocol
-  for (auto num : nums) { // set size
 
-    // check intersection size
-    auto set_size = 1 << num;
-    if (intersection_size > set_size) {
-      spdlog::error("intersection_size should not be greater than set_size");
-      return;
-    }
-
-    for (auto dim : dims) {         // d
-      for (auto metric : metrics) { // p
-        for (auto delta : deltas) { // delta
-
-          spdlog::info(
-              "*********************** setting ****************************");
-          spdlog::info("set_size          : {}", set_size);
-          spdlog::info("dimension         : {} ", dim);
-          spdlog::info("metric            : l_{} ", metric);
-          spdlog::info("delta             : {} ", delta);
-          spdlog::info("intersection_size : {}", intersection_size);
-          spdlog::info("trait             : {}", trait);
-          spdlog::info("pts_same          : {}", pts_same);
-          spdlog::info("detailed          : {}", detailed);
-          spdlog::info("fake              : {}", fake);
-
-          vector<double> time_sums(trait, 0);
-          vector<double> comm_sums(trait, 0.0);
-          for (u64 i = 0; i < trait; i++) {
-            std::pair<double, double> tmp = run_fpsi_protocol(
-                set_size, dim, metric, delta, intersection_size, ip, port,
-                pts_same, detailed, fake);
-            time_sums[i] = tmp.first;
-            comm_sums[i] = tmp.second;
-          }
-
-          double avg_online_time =
-              accumulate(time_sums.begin(), time_sums.end(), 0.0) / 1000.0 /
-              trait;
-
-          double avg_com = accumulate(comm_sums.begin(), comm_sums.end(), 0.0) /
-                           1024.0 / 1024.0 / trait;
-
-          cout << std::format("[fpsi]  {:^5}  𝐿{}  {:^5}  {:^5}  "
-                              "{:^10.3f}  {:^10.3f}",
-                              set_size, metric, dim, delta, avg_online_time,
-                              avg_com)
-               << endl;
-        }
-      }
-    }
+  // check intersection size
+  auto set_size = 1 << num;
+  if (intersection_size > set_size) {
+    spdlog::error("intersection_size should not be greater than set_size");
+    return;
   }
+
+  spdlog::info("*********************** setting ****************************");
+  spdlog::info("set_size          : {}", set_size);
+  spdlog::info("dimension         : {} ", dim);
+  spdlog::info("metric            : l_{} ", metric);
+  spdlog::info("delta             : {} ", delta);
+  spdlog::info("intersection_size : {}", intersection_size);
+  spdlog::info("trait             : {}", trait);
+  spdlog::info("pts_same          : {}", pts_same);
+  spdlog::info("detailed          : {}", detailed);
+  spdlog::info("fake              : {}", fake);
+
+  vector<double> time_sums(trait, 0);
+  vector<double> comm_sums(trait, 0.0);
+  for (u64 i = 0; i < trait; i++) {
+    std::pair<double, double> tmp =
+        run_fpsi_protocol(set_size, dim, metric, delta, intersection_size, ip,
+                          port, pts_same, detailed, fake);
+    time_sums[i] = tmp.first;
+    comm_sums[i] = tmp.second;
+  }
+
+  double avg_online_time =
+      accumulate(time_sums.begin(), time_sums.end(), 0.0) / 1000.0 / trait;
+
+  double avg_com = accumulate(comm_sums.begin(), comm_sums.end(), 0.0) /
+                   1024.0 / 1024.0 / trait;
+
+  cout << std::format("[fpsi]  {:^5}  𝐿{}  {:^5}  {:^5}  "
+                      "{:^10.3f}  {:^10.3f}",
+                      set_size, metric, dim, delta, avg_com, avg_online_time)
+       << endl;
+
+  return;
 }
 
 std::pair<double, double>
