@@ -703,7 +703,7 @@ void FPSISender::mp_ssFMat_linf(CuckooIndex<Mode> &ct) {
   }
 
   fmat_timer.start();
-  auto e = Batch_PEQT_send(r_vals_sums, sockets[0]);
+  auto e = Batch_PEQT_send<block>(r_vals_sums, sockets[0]);
   ee = sync_wait(e);
   fmat_timer.end("sender_fmat_step5_batch_peqt");
   insert_commus("sender_fmat_step5_batch_peqt", 0);
@@ -941,16 +941,17 @@ void FPSISender::ssIFMat_send(const oc::span<u64> &u_sums) {
   // step 3: Sender ssIFMat bOPPRF2
   /* ---------------------------------------------------------------------------*/
   RsOpprfSender opprf_sender;
-  vector<block> t(bins_num);
+  vector<u64> t(bins_num);
   prng.get(t.data(), bins_num);
-  vector<block> t_(keys_size);
+  vector<u64> t_(keys_size);
   for (u64 i = 0; i < bins_num; i++) {
     for (u64 j = 0; j < prefix_size; j++) {
       t_[i * prefix_size + j] = t[i];
     }
   }
 
-  coproto::sync_wait(opprf_sender.send(bins_num, r_, t_, prng, 1, sockets[0]));
+  coproto::sync_wait(
+      opprf_sender.send(bins_num, r_, oc::span<u64>(t_), prng, 1, sockets[0]));
 
   spdlog::debug("\t  [send] ssIFMat —— step3 bOPPRF2 finished! keys size: {}, "
                 "vals size: {}",
@@ -959,7 +960,7 @@ void FPSISender::ssIFMat_send(const oc::span<u64> &u_sums) {
   /* ---------------------------------------------------------------------------*/
   // step 4: Sender ssIFMat ssPEQT
   /* ---------------------------------------------------------------------------*/
-  auto e = Batch_PEQT_send(t, sockets[0]);
+  auto e = Batch_PEQT_send<u64>(t, sockets[0]);
   ee = sync_wait(e);
 
   spdlog::debug("\t  [send] ssIFMat —— step4 ssPEQT finished!");

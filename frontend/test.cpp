@@ -185,10 +185,10 @@ void test_batch_peqt(const oc::CLP &cmd) {
   osuCrypto::BitVector res0, res1;
 
   std::thread recv_thread(
-      [&]() { res0 = macoro::sync_wait(Batch_PEQT_recv(a, socket0)); });
+      [&]() { res0 = macoro::sync_wait(Batch_PEQT_recv<block>(a, socket0)); });
 
   std::thread send_thread(
-      [&]() { res1 = macoro::sync_wait(Batch_PEQT_send(b, socket1)); });
+      [&]() { res1 = macoro::sync_wait(Batch_PEQT_send<block>(b, socket1)); });
 
   // 等待线程结束
   recv_thread.join();

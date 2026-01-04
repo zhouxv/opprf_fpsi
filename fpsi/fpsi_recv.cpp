@@ -746,7 +746,7 @@ void FPSIRecv::mp_ssFMat_linf(SimpleIndex &st) {
   }
 
   fmat_timer.start();
-  auto e = Batch_PEQT_recv(rr_vals_sums, sockets[0]);
+  auto e = Batch_PEQT_recv<block>(rr_vals_sums, sockets[0]);
   ee = sync_wait(e);
   fmat_timer.end("recv_fmat_step5_batch_peqt");
   insert_commus("recv_fmat_step5_batch_peqt", 0);
@@ -955,16 +955,16 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
   /*---------------------------------------------------------------------------*/
   // step 5: copute v_ and F_ssIFMatch
   /*---------------------------------------------------------------------------*/
-  vector<u64> v_sum(bins_num, 0);
+  vector<u64> v_sums(bins_num, 0);
   for (u64 i = 0; i < bins_num; i++) {
     for (u64 j = 0; j < DIM; j++) {
-      v_sum[i] += a_random[i * a_random_stride + j * (METRIC + 1) + 1];
+      v_sums[i] += a_random[i * a_random_stride + j * (METRIC + 1) + 1];
     }
-    v_sum[i] += fast_pow(DELTA, METRIC) / 2;
+    v_sums[i] += fast_pow(DELTA, METRIC) / 2;
   }
 
   fmat_timer.start();
-  ssIFMat_recv(v_sums_);
+  ssIFMat_recv(v_sums);
   fmat_timer.end("recv_fmat_step5_ssifmat_lp");
 
   insert_commus("recv_fmat_step5_ssifmat_lp", 0);
@@ -1032,18 +1032,17 @@ void FPSIRecv::ssIFMat_recv(const oc::span<u64> &v_sums) {
   // step 3: Recv ssIFMat bOPPRF2
   /* ---------------------------------------------------------------------------*/
   RsOpprfReceiver opprf_recv;
-  vector<block> t_(bins_num);
+  vector<u64> t_(bins_num);
 
   coproto::sync_wait(opprf_recv.receive(
-      opprf_size_other, cp::span<block>(a_random.data(), bins_num), t_, prng, 1,
-      sockets[0]));
+      opprf_size_other, a_random, oc::span<u64>(t_), prng, 1, sockets[0]));
 
   spdlog::debug("\t  [recv] ssIFMat —— step3 bOPPRF2 finished! ");
 
   /* ---------------------------------------------------------------------------*/
   // step 4: Recv ssIFMat ssPEQT
   /* ---------------------------------------------------------------------------*/
-  auto e = Batch_PEQT_recv(t_, sockets[0]);
+  auto e = Batch_PEQT_recv<u64>(t_, sockets[0]);
   ee = sync_wait(e);
   spdlog::debug("\t  [recv] ssIFMat —— step4 Batch_PEQT_recv finished! ");
 }
