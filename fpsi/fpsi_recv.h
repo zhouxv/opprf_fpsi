@@ -82,6 +82,7 @@ public:
 
   void mp_ssFMat_linf(SimpleIndex &st);
   void mp_ssFMat_lp(SimpleIndex &st);
+  void ssIFMat_recv(const oc::span<u64> &v_sums);
 
   void DFmap_fig9_clear() {
     IDs.clear();
@@ -93,4 +94,6 @@ public:
     IDs_ct.clear();
     mask_mul0_pt.clear();
   }
+
+  vector<u64> v_sums_;
 };

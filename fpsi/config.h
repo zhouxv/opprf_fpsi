@@ -13,6 +13,7 @@
 using namespace oc;
 using namespace std;
 using namespace volePSI;
+namespace cp = coproto;
 
 // alias of point
 using pt = vector<u64>;

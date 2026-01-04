@@ -77,6 +77,8 @@ public:
   template <CuckooTypes Mode> void mp_ssFMat_linf(CuckooIndex<Mode> &ct);
   template <CuckooTypes Mode> void mp_ssFMat_lp(CuckooIndex<Mode> &ct);
 
+  void ssIFMat_send(const oc::span<u64> &u_sums);
+
   void DFmap_fig9_clear() {
     IDs.clear();
     IDs.shrink_to_fit();
@@ -87,4 +89,6 @@ public:
     IDs_ct.clear();
     mask_mul0_pt.clear();
   }
+
+  vector<u64> u_sums_;
 };
