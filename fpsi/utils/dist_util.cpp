@@ -44,9 +44,9 @@ void sample_points(u64 dim, u64 delta, u64 send_size, u64 recv_size,
         send_pts[i][j] = recv_pts[i][j];
       }
       for (u64 j = 0; j < 1; j++) {
-        send_pts[i][j] = (handle_bits[base_pos])
-                             ? (recv_pts[i][j] + indices[base_pos] % delta)
-                             : (recv_pts[i][j] - indices[base_pos] % delta);
+        send_pts[i][j] = (handle_bits[i])
+                             ? (recv_pts[i][j] + indices[i] % delta)
+                             : (recv_pts[i][j] - indices[i] % delta);
       }
     }
   }

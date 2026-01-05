@@ -48,7 +48,8 @@ u64 set_round(u64 dec, const set<u64> &u_set) {
 // Decompose the interval [min, max] using an improved method in appendix
 vector<string> decompose_improve(u64 min, u64 max) {
   if (min > max) {
-    throw runtime_error("decompose improve: max should >= min");
+    throw runtime_error(fmt::format(
+        "decompose improve: max should >= min; min {} max {}", min, max));
   }
 
   if (min == max) {
