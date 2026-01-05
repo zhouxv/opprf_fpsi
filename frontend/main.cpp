@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
       test_vole_slient(cmd);
       break;
     case 6:
-      test_prefix_param_lp(cmd);
+      test_prefix_param(cmd);
       break;
     default:
       spdlog::error("Unknown test type", test_type);

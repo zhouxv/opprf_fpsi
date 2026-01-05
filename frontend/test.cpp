@@ -328,6 +328,14 @@ void test_vole_slient(const oc::CLP &cmd) {
   vole_silent_test_impl<block, block, CoeffCtxGF128>(cmd);
 }
 
+void test_prefix_param(const oc::CLP &cmd) {
+  u64 metric = cmd.getOr("m", 0);
+  if (metric == 0)
+    test_prefix_param_linf(cmd);
+  else
+    test_prefix_param_lp(cmd);
+}
+
 void test_prefix_param_lp(const oc::CLP &cmd) {
   const vector<u64> deltas = cmd.getManyOr<u64>("deltas", {30, 60, 120, 250});
   const u64 trait = cmd.getOr<u64>("i", 1 << 28);
@@ -361,6 +369,43 @@ void test_prefix_param_lp(const oc::CLP &cmd) {
         map[delta + 1] = prefixs0.size();
       if (map[delta] < prefixs1.size())
         map[delta] = prefixs1.size();
+    }
+  }
+
+  // 输出map，按照key的大小排序
+  for (const auto &kv : map) {
+    spdlog::info("delta: {}, count: {}", kv.first, kv.second);
+  }
+}
+
+void test_prefix_param_linf(const oc::CLP &cmd) {
+  const vector<u64> deltas =
+      cmd.getManyOr<u64>("deltas", {10, 30, 60, 120, 250});
+  const u64 logn = cmd.getOr<u64>("n", 20);
+  u64 trait = 1 << logn;
+
+  map<u64, PrefixParam> params;
+
+  params[21] = {{0, 1, 2, 3}, 6};
+  params[61] = {{0, 1, 2, 3, 4}, 9};
+  params[121] = {{0, 1, 2, 3, 4, 5}, 10};
+  params[241] = {{0, 1, 2, 3, 5, 6}, 12};
+  params[501] = {{0, 1, 2, 4, 5, 6}, 17};
+
+  std::map<u64, u64> map;
+  PRNG prng(oc::sysRandomSeed());
+
+  for (auto delta : deltas) {
+    auto param = params[delta * 2 + 1];
+
+    for (u64 j = 0; j < trait; j++) {
+      u64 val = (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 3 * delta) +
+                1.5 * delta;
+
+      auto prefixs = set_dec(val - delta, val + delta, param.first);
+
+      if (map[2 * delta + 1] < prefixs.size())
+        map[2 * delta + 1] = prefixs.size();
     }
   }
 

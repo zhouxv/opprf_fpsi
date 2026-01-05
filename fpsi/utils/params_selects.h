@@ -1,12 +1,10 @@
 #pragma once
 #include <cryptoTools/Common/Defines.h>
-#include <format>
 #include <map>
 #include <mutex>
 #include <set>
 #include <sstream>
 #include <utility>
-#include <vector>
 
 using namespace std;
 using namespace oc;
@@ -69,7 +67,7 @@ public:
 
       params[121] = {{0, 1, 2, 3, 4, 5}, 10};
 
-      params[241] = {{0, 1, 2, 3, 5, 6}, 12};
+      params[241] = {{0, 1, 2, 3, 5, 6}, 13};
 
       params[501] = {{0, 1, 2, 4, 5, 6}, 17};
     });

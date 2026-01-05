@@ -11,4 +11,6 @@ void test_batch_peqt(const oc::CLP &cmd);
 
 void test_vole_slient(const oc::CLP &cmd);
 
+void test_prefix_param(const oc::CLP &cmd);
 void test_prefix_param_lp(const oc::CLP &cmd);
+void test_prefix_param_linf(const oc::CLP &cmd);
