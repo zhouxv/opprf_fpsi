@@ -11,6 +11,42 @@ using namespace oc;
 
 using PrefixParam = std::pair<std::set<u64>, u64>;
 
+class IfMatchParamTable {
+public:
+  static const map<u64, PrefixParam> &getTable() {
+    static once_flag flag;
+    static map<u64, PrefixParam> params;
+
+    // ifmatch uses parameter settings from unused set_dec
+    call_once(flag, []() {
+      params[11] = {{0, 2}, 5};
+      params[31] = {{0, 1, 2, 3}, 6};
+      params[61] = {{0, 2, 3, 4}, 11};
+      params[121] = {{0, 2, 4, 5}, 14};
+      params[251] = {{0, 2, 4, 6}, 17};
+
+      params[101] = {{0, 2, 4, 6}, 14};
+      params[901] = {{0, 3, 6, 9}, 33};
+      params[3601] = {{0, 4, 8, 11}, 46};
+      params[14401] = {{0, 4, 8, 13}, 91};
+      params[62501] = {{0, 5, 10, 15}, 129};
+    });
+
+    return params;
+  }
+
+  static PrefixParam getSelectedParam(u64 t) {
+    const auto &params = getTable();
+    auto it = params.find(t);
+    if (it != params.end())
+      return it->second;
+
+    throw std::out_of_range(
+        "IfMatchParamTable getSelectedParam Invalid parameter key: " +
+        std::to_string(t));
+  }
+};
+
 class LpParamTable {
 public:
   static const map<u64, PrefixParam> &getTable() {

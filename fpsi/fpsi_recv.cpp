@@ -27,6 +27,7 @@
 #include <ipcl/utils/context.hpp>
 #include <libOTe/TwoChooseOne/Silent/SilentOtExtReceiver.h>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 void FPSIRecv::DFmap_fig8_offline() {
   auto t = DELTA * 2 + 1;
@@ -490,13 +491,11 @@ void FPSIRecv::psi_offline() {
                        SilentBaseType::BaseExtend,
                        SdNoiseDistribution::Regular);
 
-    spdlog::info("\tRecv step VOLE recv started!");
-
     psi_offline_timer.start();
     auto proto = receiver.silentReceive(a_vole, c_vole, recv_prng, sockets[0]);
     cp::sync_wait(proto);
     psi_offline_timer.end("recv_offline_vole_recv");
-    spdlog::info("\tRecv step VOLE recv finished!");
+    spdlog::info("\t[Recv] VOLE recv finished!");
 
     sockets[0].mImpl->mBytesReceived = 0;
     sockets[0].mImpl->mBytesSent = 0;
@@ -777,7 +776,7 @@ void FPSIRecv::mp_ssFMat_linf(SimpleIndex &st) {
   vector<block> rr_vals_sums(bins_num, ZeroBlock);
   for (u64 i = 0; i < rr_vals_sums.size(); i++) {
     for (u64 j = 0; j < DIM; j++) {
-      rr_vals_sums[i] ^= rr_vals[j][i];
+      rr_vals_sums[i] ^= rr_vals(j, i);
     }
   }
 
@@ -808,14 +807,19 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
 
   // prepare getList a_random
   u64 bins_num = st.mNumBins;
-  u64 a_random_size = bins_num * DIM * (METRIC + 1);
+  // a0 and ap
+  u64 a_random_size = bins_num * DIM * 2;
 
   // generate a_random
   vector<u32> a_random(a_random_size);
   for (u64 i = 0; i < a_random_size; i++) {
     a_random[i] = recv_prng.get<u32>() >> 1;
   }
-  u64 a_random_stride = DIM * (METRIC + 1);
+  u64 a_random_stride = DIM * 2;
+  u64 vole_stride = DIM * (METRIC - 1);
+
+  // prepare v_
+  oc::Matrix<u32> v_(bins_num, DIM);
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
@@ -856,15 +860,17 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
           blake3_hasher_reset(&hasher);
           prefix_keys.push_back(hash_out);
 
-          auto tmp_a_idx = bin_idx * a_random_stride + dim_index * (METRIC + 1);
-          for (u64 p_index = 0; p_index <= METRIC; p_index++) {
-            if (p_index == 0) {
-              prefix_vals[val_index][p_index] = a_random[tmp_a_idx + p_index];
-            } else {
-              prefix_vals[val_index][p_index] =
-                  a_random[tmp_a_idx + p_index] + fast_pow(diff, p_index);
-            }
+          auto tmp_a_random_idx = bin_idx * a_random_stride + dim_index * 2;
+          prefix_vals(val_index, 0) = a_random[tmp_a_random_idx];
+          prefix_vals(val_index, METRIC) =
+              a_random[tmp_a_random_idx + METRIC] + fast_pow(diff, METRIC);
+
+          auto tmp_avole_idx = bin_idx * vole_stride + dim_index * (METRIC - 1);
+          for (u64 p_index = 1; p_index < METRIC; p_index++) {
+            prefix_vals(val_index, p_index) =
+                a_vole[tmp_avole_idx + (p_index - 1)] + fast_pow(diff, p_index);
           }
+
           val_index++;
         }
       }
@@ -885,15 +891,17 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
           blake3_hasher_reset(&hasher);
           prefix_keys.push_back(hash_out);
 
-          auto tmp_a_idx = bin_idx * a_random_stride + dim_index * (METRIC + 1);
-          for (u64 p_index = 0; p_index <= METRIC; p_index++) {
-            if (p_index == 0) {
-              prefix_vals[val_index][p_index] = a_random[tmp_a_idx + p_index];
-            } else {
-              prefix_vals[val_index][p_index] =
-                  a_random[tmp_a_idx + p_index] + fast_pow(diff, p_index);
-            }
+          auto tmp_a_random_idx = bin_idx * a_random_stride + dim_index * 2;
+          prefix_vals(val_index, 0) = a_random[tmp_a_random_idx];
+          prefix_vals(val_index, METRIC) =
+              a_random[tmp_a_random_idx + METRIC] + fast_pow(diff, METRIC);
+
+          auto tmp_avole_idx = bin_idx * vole_stride + dim_index * (METRIC - 1);
+          for (u64 p_index = 1; p_index < METRIC; p_index++) {
+            prefix_vals(val_index, p_index) =
+                a_vole[tmp_avole_idx + (p_index - 1)] + fast_pow(diff, p_index);
           }
+
           val_index++;
         }
       }
@@ -949,8 +957,7 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
     /*---------------------------------------------------------------------------*/
     vector<u32> a0(bins_num);
     for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
-      a0[bin_idx] =
-          a_random[bin_idx * a_random_stride + dim_index * (METRIC + 1)];
+      a0[bin_idx] = a_random[bin_idx * a_random_stride + dim_index * 2];
     }
     u64 batch_size = delta_param.first.size() + delta_plus_param.first.size();
     u64 batch_num = bins_num;
@@ -971,6 +978,29 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
     /*---------------------------------------------------------------------------*/
     // step 5: copute v_
     /*---------------------------------------------------------------------------*/
+    if (METRIC == 1) {
+      // metric == 1
+      for (u64 i = 0; i < bins_num; i++) {
+        v_(i, dim_index) = a_random[i * a_random_stride + dim_index * 2 + 1];
+      }
+    } else {
+      // metric > 1
+      vector<u32> v_si(bins_num * (METRIC - 1));
+      cp::sync_wait(sockets[dim_index].recvResize(v_si));
+
+      u64 tmp_offset = dim_index * (METRIC - 1);
+
+      for (u64 i = 0; i < bins_num; i++) {
+        for (u64 s = 1; s < METRIC; s++) {
+          v_(i, dim_index) +=
+              v_si[i * (METRIC - 1) + (s - 1)] *
+                  a_vole[i * vole_stride + tmp_offset + (s - 1)] -
+              c_vole[i * vole_stride + tmp_offset + (s - 1)];
+        }
+
+        v_(i, dim_index) += a_random[i * a_random_stride + dim_index * 2 + 1];
+      }
+    }
 
     fpsi_timer.merge(dim_thread_timer);
   };
@@ -994,9 +1024,9 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
   vector<u64> v_sums(bins_num, 0);
   for (u64 i = 0; i < bins_num; i++) {
     for (u64 j = 0; j < DIM; j++) {
-      v_sums[i] += a_random[i * a_random_stride + j * (METRIC + 1) + 1];
+      v_sums[i] += v_(i, j);
     }
-    v_sums[i] += fast_pow(DELTA, METRIC) / 2;
+    // v_sums[i] += fast_pow(DELTA, METRIC) / 2;
   }
 
   fmat_timer.start();
@@ -1016,7 +1046,8 @@ void FPSIRecv::ssIFMat_recv(const oc::span<u64> &v_sums) {
   /* ---------------------------------------------------------------------------*/
   // step 1: Recv ssIFMat Set_Dec
   /* ---------------------------------------------------------------------------*/
-  auto prefix_param = LinfParamTable::getSelectedParam(2 * DELTA + 1);
+  u64 threshold = fast_pow(DELTA, METRIC);
+  auto prefix_param = IfMatchParamTable::getSelectedParam(threshold + 1);
 
   u64 a_random_size = bins_num;
   vector<block> a_random(a_random_size);
@@ -1032,7 +1063,7 @@ void FPSIRecv::ssIFMat_recv(const oc::span<u64> &v_sums) {
   blake3_hasher_init(&hasher);
   for (u64 i = 0; i < bins_num; i++) {
     auto prefixs =
-        set_dec(v_sums[i] - DELTA, v_sums[i] + DELTA, prefix_param.first);
+        set_dec(v_sums[i], v_sums[i] + threshold, prefix_param.first);
     for (auto prefix : prefixs) {
       block hash_out;
       blake3_hasher_update(&hasher, prefix.data(), prefix.size());

@@ -7,6 +7,7 @@
 #include "rb_okvs/rb_okvs.h"
 #include "utils/commu_util.h"
 #include "utils/data_conversion_util.h"
+#include "utils/dist_util.h"
 #include "utils/okvs_util.h"
 #include "utils/params_selects.h"
 #include "utils/set_dec.h"
@@ -455,14 +456,12 @@ void FPSISender::psi_offline() {
     sender.configure(numVole, SilentSecType::SemiHonest, DefaultMultType,
                      SilentBaseType::BaseExtend, SdNoiseDistribution::Regular);
 
-    spdlog::info("\tSender silent VOLE sender started...");
-
     psi_offline_timer.start();
-    auto proto = sender.silentSend(DELTA, d_vole, sender_prng, sockets[0]);
+    auto proto = sender.silentSend(b_delta, d_vole, sender_prng, sockets[0]);
     cp::sync_wait(proto);
     psi_offline_timer.end("sender_offline_vole_sender");
 
-    spdlog::info("\tSender silent VOLE sender finished!");
+    spdlog::info("\t[send] silent VOLE sender finished!");
     sockets[0].mImpl->mBytesReceived = 0;
     sockets[0].mImpl->mBytesSent = 0;
   }
@@ -762,8 +761,9 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
   u64 bins_num = ct.mNumBins;
 
   u64 prefix_size_each_bin = delta_param.first.size() * 2;
+  u64 vole_stride = DIM * (METRIC - 1);
 
-  oc::Matrix<u64> u_(bins_num, DIM);
+  oc::Matrix<u32> u_(bins_num, DIM);
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
@@ -881,12 +881,40 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
     /*---------------------------------------------------------------------------*/
     // step 5: compute u_
     /*---------------------------------------------------------------------------*/
-    for (u64 i = 0; i < bins_num; i++) {
-      auto idx = idxs[i];
-      u_[i][dim_index] = u[i * prefix_size_each_bin + idx][1];
-      if (!ct.mBins[i].isEmpty()) {
-        u_[i][dim_index] += e[i * prefix_size_each_bin + idx];
+
+    if (METRIC == 1) {
+      // for metric == 1
+      for (u64 i = 0; i < bins_num; i++) {
+        auto pis_idx = idxs[i];
+        auto tmp_idx = i * prefix_size_each_bin + pis_idx;
+        u_[i][dim_index] = u[tmp_idx][1];
+        if (!ct.mBins[i].isEmpty()) {
+          u_[i][dim_index] += e[tmp_idx];
+        }
       }
+    } else {
+      // for metric > 1
+      vector<u32> v_si(bins_num * (METRIC - 1));
+      for (u64 i = 0; i < bins_num; i++) {
+        auto pis_idx = idxs[i];
+        auto tmp_idx = i * prefix_size_each_bin + pis_idx;
+        auto tmp_e = e[tmp_idx];
+
+        u_[i][dim_index] = u[tmp_idx][METRIC] + fast_pow(tmp_e, METRIC);
+
+        for (u64 s = 1; s < METRIC; s++) {
+          u32 mid_val =
+              (u32)combination(METRIC, s) * (u32)fast_pow(tmp_e, METRIC - s);
+          u_[i][dim_index] +=
+              mid_val * u[tmp_idx][s] -
+              d_vole[i * vole_stride + dim_index * (METRIC - 1) + (s - 1)];
+          v_si[i * (METRIC - 1) + (s - 1)] = mid_val + b_delta;
+        }
+      }
+
+      cp::sync_wait(sockets[dim_index].send(v_si));
+      cp::sync_wait(sockets[dim_index].flush());
+      insert_commus(fmt::format("sender_{}_fmat_vis", dim_index), dim_index);
     }
 
     fpsi_timer.merge(dim_thread_timer);
@@ -931,7 +959,8 @@ void FPSISender::ssIFMat_send(const oc::span<u64> &u_sums) {
   /* ---------------------------------------------------------------------------*/
   // step 1: Sender ssIFMat prefix
   /* ---------------------------------------------------------------------------*/
-  auto prefix_param = LinfParamTable::getSelectedParam(2 * DELTA + 1);
+  u64 threshold = fast_pow(DELTA, METRIC);
+  auto prefix_param = IfMatchParamTable::getSelectedParam(threshold + 1);
   u64 prefix_size = prefix_param.first.size();
 
   vector<block> prefix_keys;
