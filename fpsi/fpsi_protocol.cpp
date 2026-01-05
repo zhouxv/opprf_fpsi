@@ -347,8 +347,10 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
     sender.psi_offline_fake();
     recv.psi_offline_fake();
   } else {
-    sender.psi_offline();
-    recv.psi_offline();
+    std::thread recv_offline(std::bind(&FPSIRecv::psi_offline, &recv));
+    std::thread send_offline(std::bind(&FPSISender::psi_offline, &sender));
+    recv_offline.join();
+    send_offline.join();
   }
 
   timer.end("protocol_offline");

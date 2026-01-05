@@ -442,13 +442,47 @@ void FPSISender::psi_offline() {
   DFmap_fig9_offline();
   psi_offline_timer.end("send_offline_fmap");
 
+  if (METRIC > 1) {
+    // slient VOLE sender
+    CuckooIndex<NotThreadSafe> ct;
+    ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+
+    u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
+    b_delta = sender_prng.get<u32>();
+    d_vole.resize(numVole);
+
+    SilentVoleSender<u32, u32> sender;
+    sender.configure(numVole, SilentSecType::SemiHonest, DefaultMultType,
+                     SilentBaseType::BaseExtend, SdNoiseDistribution::Regular);
+
+    spdlog::info("\tSender silent VOLE sender started...");
+
+    psi_offline_timer.start();
+    auto proto = sender.silentSend(DELTA, d_vole, sender_prng, sockets[0]);
+    cp::sync_wait(proto);
+    psi_offline_timer.end("sender_offline_vole_sender");
+
+    spdlog::info("\tSender silent VOLE sender finished!");
+    sockets[0].mImpl->mBytesReceived = 0;
+    sockets[0].mImpl->mBytesSent = 0;
+  }
+
   fpsi_timer.merge(psi_offline_timer);
 }
 
 void FPSISender::psi_offline_fake() {
-  simpleTimer psi_offline_fake_timer;
+
   DFmap_fig9_offline_fake();
-  fpsi_timer.merge(psi_offline_fake_timer);
+
+  if (METRIC > 1) {
+    CuckooIndex<NotThreadSafe> ct;
+    ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+
+    u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
+    b_delta = sender_prng.get<u32>();
+    d_vole.resize(numVole);
+    sender_prng.get<u32>(d_vole.data(), d_vole.size());
+  }
 }
 
 void FPSISender::psi_online() {

@@ -476,14 +476,49 @@ void FPSIRecv::psi_offline() {
   DFmap_fig9_offline();
   psi_offline_timer.end("recv_offline_fmap");
 
+  // slient VOLE recv
+  if (METRIC > 1) {
+    CuckooIndex<NotThreadSafe> ct;
+    ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+    u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
+
+    a_vole.resize(numVole);
+    c_vole.resize(numVole);
+
+    SilentVoleReceiver<u32, u32> receiver;
+    receiver.configure(numVole, SilentSecType::SemiHonest, DefaultMultType,
+                       SilentBaseType::BaseExtend,
+                       SdNoiseDistribution::Regular);
+
+    spdlog::info("\tRecv step VOLE recv started!");
+
+    psi_offline_timer.start();
+    auto proto = receiver.silentReceive(a_vole, c_vole, recv_prng, sockets[0]);
+    cp::sync_wait(proto);
+    psi_offline_timer.end("recv_offline_vole_recv");
+    spdlog::info("\tRecv step VOLE recv finished!");
+
+    sockets[0].mImpl->mBytesReceived = 0;
+    sockets[0].mImpl->mBytesSent = 0;
+  }
+
   fpsi_timer.merge(psi_offline_timer);
 }
 
 void FPSIRecv::psi_offline_fake() {
-  simpleTimer psi_offline_fake_timer;
   DFmap_fig9_offline_fake();
 
-  fpsi_timer.merge(psi_offline_fake_timer);
+  if (METRIC > 1) {
+    CuckooIndex<NotThreadSafe> ct;
+    ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+
+    u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
+
+    a_vole.resize(numVole);
+    c_vole.resize(numVole);
+    recv_prng.get<u32>(a_vole.data(), a_vole.size());
+    recv_prng.get<u32>(c_vole.data(), c_vole.size());
+  }
 }
 
 void FPSIRecv::psi_online() {
@@ -592,6 +627,7 @@ void FPSIRecv::psi_online() {
     recvMsgs[i] = tmp_blk.get<u64>()[0];
   }
   psi_online_timer.end("recv_psi_ot");
+  insert_commus("recv_psi_ot", 0);
 
   spdlog::info("  Recv step4: recv OTs finished!");
 

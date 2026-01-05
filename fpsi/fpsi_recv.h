@@ -49,7 +49,11 @@ public:
   vector<vector<block>> get_id_encoding;
   vector<u64> fig9_ID_xr;
 
+  // F_mat results
   BitVector ee;
+
+  // vole results
+  AlignedUnVector<u32> a_vole, c_vole;
 
   // test tmp
   vector<u64> intersection_idxs_tmp;

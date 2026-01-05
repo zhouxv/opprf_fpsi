@@ -46,7 +46,12 @@ public:
   vector<vector<block>> get_id_encoding;
   vector<u64> fig9_ID_ys;
 
+  // F_mat results
   BitVector ee;
+
+  // vole results
+  AlignedUnVector<u32> d_vole;
+  u32 b_delta;
 
   FPSISender(u64 dim, u64 delta, u64 pt_num, u64 metric, u64 thread_num,
              vector<pt> &pts, ipcl::KeyPair &fmap_recv_key,
