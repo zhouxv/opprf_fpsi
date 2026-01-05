@@ -414,3 +414,22 @@ void test_prefix_param_linf(const oc::CLP &cmd) {
     spdlog::info("delta: {}, count: {}", kv.first, kv.second);
   }
 }
+
+void test_data_convert(const oc::CLP &cmd) {
+  u64 delta = cmd.getOr("delta", 250);
+  u64 trait = cmd.getOr("trait", 250);
+
+  PRNG prng(oc::sysRandomSeed());
+  for (u64 i = 0; i < trait; i++) {
+    u8 a = prng.get<u8>();
+    u64 a_ = a;
+    u64 a__ = a_;
+    i8 b = a;
+    u64 c = b;
+    a__ += ((i8)((prng.get<u8>()) % (delta - 1)) - delta / 2);
+
+    spdlog::info("a u8: {:5}; a_ u64: {:5}; a+=i8 {:20}, b i8: {:10} , c "
+                 "i8->u64: {:20} , u64 + i8: {:10}",
+                 a, a_, a__, b, c, a__ + b);
+  }
+}

@@ -66,6 +66,9 @@ int main(int argc, char **argv) {
     case 6:
       test_prefix_param(cmd);
       break;
+    case 7:
+      test_data_convert(cmd);
+      break;
     default:
       spdlog::error("Unknown test type", test_type);
     }

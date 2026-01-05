@@ -1,6 +1,8 @@
+#include <cryptoTools/Common/BitVector.h>
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/PRNG.h>
+#include <vector>
 
 #include "dist_util.h"
 
@@ -12,8 +14,7 @@ void sample_points(u64 dim, u64 delta, u64 send_size, u64 recv_size,
   for (u64 i = 0; i < send_size; i++) {
     for (u64 j = 0; j < dim; j++) {
       send_pts[i][j] =
-          (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 3 * delta) +
-          1.5 * delta;
+          (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 4 * delta) + 2 * delta;
     }
   }
 
@@ -27,19 +28,25 @@ void sample_points(u64 dim, u64 delta, u64 send_size, u64 recv_size,
     for (u64 i = 0; i < recv_size; i++) {
       for (u64 j = 0; j < dim; j++) {
         recv_pts[i][j] =
-            (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 3 * delta) +
-            1.5 * delta;
+            (prng.get<u64>()) % ((0xffff'ffff'ffff'ffff) - 4 * delta) +
+            2 * delta;
       }
     }
 
-    // u64 base_pos = (prng.get<u64>()) % (send_size - intersection_size - 1);
+    BitVector handle_bits(intersection_size);
+    vector<u8> indices(intersection_size);
+    prng.get(handle_bits.data(), handle_bits.sizeBytes());
+    prng.get(indices.data(), intersection_size);
+
     u64 base_pos = 0;
     for (u64 i = base_pos; i < base_pos + intersection_size; i++) {
       for (u64 j = 0; j < dim; j++) {
-        send_pts[i][j] = recv_pts[i - base_pos][j];
+        send_pts[i][j] = recv_pts[i][j];
       }
       for (u64 j = 0; j < 1; j++) {
-        send_pts[i][j] += ((i8)((prng.get<u8>()) % (delta - 1)) - delta / 2);
+        send_pts[i][j] = (handle_bits[base_pos])
+                             ? (recv_pts[i][j] + indices[base_pos] % delta)
+                             : (recv_pts[i][j] - indices[base_pos] % delta);
       }
     }
   }
