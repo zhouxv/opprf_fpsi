@@ -11,6 +11,24 @@
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 
+// usage of command line parser
+void printUsage() {
+  std::cout
+      << "Usage:\n"
+      << "  ./fpsi [options]\n\n"
+      << "Options:\n"
+      << "  -p <protocol>    Protocol: 1=FMAP (default), 2=FPSI\n"
+      << "  -t <test>        Run unit test:\n"
+      << "                   1 = opprf test\n"
+      << "                   2 = pailliar test\n"
+      << "                   3 = batch peqt test\n"
+      << "                   4 = vole noisy test\n"
+      << "                   5 = vole silent test\n"
+      << "                   6 = prefix param test\n"
+      << "                   7 = data convert test\n"
+      << "  -log <level>     Log level: 0=off, 1=info (default), 2=debug\n";
+}
+
 int main(int argc, char **argv) {
   CLP cmd;
   cmd.parse(argc, argv);
@@ -71,6 +89,7 @@ int main(int argc, char **argv) {
       break;
     default:
       spdlog::error("Unknown test type", test_type);
+      printUsage();
     }
     return 0;
   }
@@ -86,8 +105,12 @@ int main(int argc, char **argv) {
       break;
     default:
       spdlog::error("Unknown protocol type", protocol_type);
+      printUsage();
     }
+    return 0;
   }
+
+  printUsage();
 
   return 0;
 }
