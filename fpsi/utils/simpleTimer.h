@@ -34,8 +34,9 @@ public:
   double get_by_key(const string &key) { return timers.at(key); }
 
   void merge(simpleTimer &other) {
+    if (&other == this)
+      return;
     std::lock_guard<std::mutex> lock(mtx);
-    std::lock_guard<std::mutex> other_lock(other.mtx);
 
     auto other_keys = other.timer_keys;
     auto other_maps = other.timers;

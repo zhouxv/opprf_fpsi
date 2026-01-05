@@ -15,6 +15,7 @@ public:
   simpleTimer fpsi_timer;                        // timer
   std::vector<std::pair<string, double>> commus; // communication counter
   vector<coproto::Socket> &sockets;              // communication socket
+  std::mutex commu_mtx; // mutex for communication counter
 
   void print_time() { fpsi_timer.print(); }
 
@@ -27,6 +28,7 @@ public:
   }
 
   void insert_commus(const string &msg, u64 socket_index) {
+    std::lock_guard<std::mutex> lock(commu_mtx);
     commus.push_back(
         {msg, sockets[socket_index].bytesSent() / 1024.0 / 1024.0});
     sockets[socket_index].mImpl->mBytesSent = 0;

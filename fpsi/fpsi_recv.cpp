@@ -478,7 +478,7 @@ void FPSIRecv::psi_offline() {
 
   // slient VOLE recv
   if (METRIC > 1) {
-    CuckooIndex<NotThreadSafe> ct;
+    CuckooIndex<ThreadSafe> ct;
     ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
     u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
 
@@ -509,7 +509,7 @@ void FPSIRecv::psi_offline_fake() {
   DFmap_fig9_offline_fake();
 
   if (METRIC > 1) {
-    CuckooIndex<NotThreadSafe> ct;
+    CuckooIndex<ThreadSafe> ct;
     ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
 
     u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
@@ -550,7 +550,7 @@ void FPSIRecv::psi_online() {
   // }
 
   psi_online_timer.start();
-  CuckooIndex<NotThreadSafe> cuckoo_table;
+  CuckooIndex<ThreadSafe> cuckoo_table;
   cuckoo_table.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
   SimpleIndex simple_table;
   simple_table.init(cuckoo_table.mNumBins, PTS_NUM);

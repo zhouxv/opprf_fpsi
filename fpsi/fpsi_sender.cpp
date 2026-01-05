@@ -444,7 +444,7 @@ void FPSISender::psi_offline() {
 
   if (METRIC > 1) {
     // slient VOLE sender
-    CuckooIndex<NotThreadSafe> ct;
+    CuckooIndex<ThreadSafe> ct;
     ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
 
     u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
@@ -475,7 +475,7 @@ void FPSISender::psi_offline_fake() {
   DFmap_fig9_offline_fake();
 
   if (METRIC > 1) {
-    CuckooIndex<NotThreadSafe> ct;
+    CuckooIndex<ThreadSafe> ct;
     ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
 
     u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
@@ -515,7 +515,7 @@ void FPSISender::psi_online() {
   // }
 
   psi_online_timer.start();
-  CuckooIndex<NotThreadSafe> cuckoo_table;
+  CuckooIndex<ThreadSafe> cuckoo_table;
   cuckoo_table.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
   cuckoo_table.insert(ids_blks);
   psi_online_timer.end("sender_cuckoo_hash");
@@ -549,7 +549,7 @@ void FPSISender::psi_online() {
   }
   psi_online_timer.end("sender_ssFmat");
 
-  spdlog::info("  Sender step3: mp_ssFMath_L{} finished!",
+  spdlog::info("  Sender step3: mp_ssFMat_L{} finished!",
                (METRIC == 0) ? "inf" : std::to_string(METRIC));
 
   /* ---------------------------------------------------------------------------*/
