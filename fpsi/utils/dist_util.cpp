@@ -260,39 +260,3 @@ vector<pt> intersection(const pt &p, u64 metric, u64 dim, u64 delta,
 
   return results;
 }
-
-/// Calculate the combination number
-///
-/// Calculate the number of combinations for choosing `k` elements from `n`
-/// elements.
-///
-/// # Parameters
-/// - `n`: Total number of elements
-/// - `k`: Number of elements to choose
-///
-/// # Returns
-/// Returns a value of type `u64` representing the number of combinations.
-/// Returns 0 if `k` is greater than `n`.
-u64 combination(u64 n, u64 k) {
-  if (k > n)
-    return 0;
-  if (k > n - k)
-    k = n - k; // C(n, k) == C(n, n-k), do less computation
-  u64 result = 1;
-  for (u64 i = 0; i < k; ++i) {
-    result = result * (n - i) / (i + 1);
-  }
-  return result;
-}
-
-// fast exponentiation
-u64 fast_pow(u64 base, u64 exp) {
-  u64 result = 1;
-  while (exp > 0) {
-    if (exp & 1)
-      result *= base;
-    base *= base;
-    exp >>= 1;
-  }
-  return result;
-}

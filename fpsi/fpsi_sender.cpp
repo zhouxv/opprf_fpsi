@@ -452,6 +452,28 @@ void FPSISender::psi_offline() {
     b_delta = sender_prng.get<u32>();
     d_vole.resize(numVole);
 
+    // for (u64 i = 0; i < d_vole.size(); i++) {
+    //   d_vole[i] = sender_prng.get<u16>();
+    // }
+
+    // vector<u32> a_tmp(numVole);
+    // vector<u32> c_tmp(numVole);
+
+    // cp::sync_wait(sockets[0].recvResize(a_tmp));
+    // cp::sync_wait(sockets[0].flush());
+
+    // for (u64 i = 0; i < numVole; i++) {
+    //   c_tmp[i] = a_tmp[i] * b_delta + d_vole[i];
+    // }
+
+    // cp::sync_wait(sockets[0].send(c_tmp));
+    // cp::sync_wait(sockets[0].flush());
+
+    // for (u64 i = 0; i < 1; i++) {
+    //   spdlog::debug("\t[send] VOLE a_vole[{}] d {} ; b {}", i, d_vole[i],
+    //                 b_delta);
+    // }
+
     SilentVoleSender<u32, u32> sender;
     sender.configure(numVole, SilentSecType::SemiHonest, DefaultMultType,
                      SilentBaseType::BaseExtend, SdNoiseDistribution::Regular);
@@ -462,6 +484,7 @@ void FPSISender::psi_offline() {
     psi_offline_timer.end("sender_offline_vole_sender");
 
     spdlog::info("\t[send] silent VOLE sender finished!");
+
     sockets[0].mImpl->mBytesReceived = 0;
     sockets[0].mImpl->mBytesSent = 0;
   }
@@ -900,11 +923,11 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
         auto tmp_idx = i * prefix_size_each_bin + pis_idx;
         auto tmp_e = e[tmp_idx];
 
-        u_[i][dim_index] = u[tmp_idx][METRIC] + fast_pow(tmp_e, METRIC);
+        u_[i][dim_index] = u[tmp_idx][METRIC] + fast_pow<u32>(tmp_e, METRIC);
 
         for (u64 s = 1; s < METRIC; s++) {
           u32 mid_val =
-              (u32)combination(METRIC, s) * (u32)fast_pow(tmp_e, METRIC - s);
+              combination<u32>(METRIC, s) * fast_pow<u32>(tmp_e, METRIC - s);
           u_[i][dim_index] +=
               mid_val * u[tmp_idx][s] -
               d_vole[i * vole_stride + dim_index * (METRIC - 1) + (s - 1)];
@@ -959,7 +982,7 @@ void FPSISender::ssIFMat_send(const oc::span<u64> &u_sums) {
   /* ---------------------------------------------------------------------------*/
   // step 1: Sender ssIFMat prefix
   /* ---------------------------------------------------------------------------*/
-  u64 threshold = fast_pow(DELTA, METRIC);
+  u64 threshold = fast_pow<u64>(DELTA, METRIC);
   auto prefix_param = IfMatchParamTable::getSelectedParam(threshold + 1);
   u64 prefix_size = prefix_param.first.size();
 

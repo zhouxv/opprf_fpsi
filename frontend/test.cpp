@@ -383,6 +383,8 @@ void test_vole_slient(const oc::CLP &cmd) {
 
         spdlog::info("VOLE[{}]: -D {} AB-C {}", i, -D[i],
                      A[i] * B_DELTA - C[i]);
+        spdlog::info("VOLE[{}]: -D {} AB-C {}", i, (u64)D[i],
+                     (u64)A[i] * (u64)B_DELTA + (u64)C[i]);
       }
     }
 
@@ -512,7 +514,7 @@ void test_prefix_param_ifmatch(const oc::CLP &cmd) {
 
   for (auto delta : deltas) {
     for (u64 j = 1; j < 3; j++) {
-      auto tmp = fast_pow(delta, j);
+      auto tmp = fast_pow<u64>(delta, j);
       auto param = params[tmp + 1];
 
       for (u64 j = 0; j < trait; j++) {

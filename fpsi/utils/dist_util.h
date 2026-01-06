@@ -30,8 +30,41 @@ vector<pt> intersection(const pt &p, u64 metric, u64 dim, u64 delta,
                         u64 sidelen, u64 blk_cells, u64 delta_l2);
 
 // math compute
-u64 fast_pow(u64 base, u64 exp);
-u64 combination(u64 n, u64 k);
+/// Calculate the combination number
+///
+/// Calculate the number of combinations for choosing `k` elements from `n`
+/// elements.
+///
+/// # Parameters
+/// - `n`: Total number of elements
+/// - `k`: Number of elements to choose
+///
+/// # Returns
+/// Returns a value of type `u64` representing the number of combinations.
+/// Returns 0 if `k` is greater than `n`.
+template <typename T> T combination(T n, T k) {
+  if (k > n)
+    return 0;
+  if (k > n - k)
+    k = n - k; // C(n, k) == C(n, n-k), do less computation
+  T result = 1;
+  for (T i = 0; i < k; ++i) {
+    result = result * (n - i) / (i + 1);
+  }
+  return result;
+}
+
+// fast exponentiation
+template <typename T> T fast_pow(u64 base, u64 exp) {
+  T result = 1;
+  while (exp > 0) {
+    if (exp & 1)
+      result *= base;
+    base *= base;
+    exp >>= 1;
+  }
+  return result;
+}
 
 struct Monty25519Hash {
   size_t operator()(const osuCrypto::Sodium::Monty25519 &point) const {

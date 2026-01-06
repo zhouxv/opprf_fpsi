@@ -14,6 +14,7 @@
 #include "utils/set_dec.h"
 #include "utils/simpleTimer.h"
 
+#include <coproto/Common/macoro.h>
 #include <cryptoTools/Common/BitVector.h>
 #include <cryptoTools/Common/CuckooIndex.h>
 #include <cryptoTools/Common/Defines.h>
@@ -486,6 +487,21 @@ void FPSIRecv::psi_offline() {
     a_vole.resize(numVole);
     c_vole.resize(numVole);
 
+    // for (u64 i = 0; i < a_vole.size(); i++) {
+    //   a_vole[i] = recv_prng.get<u16>();
+    // }
+
+    // cp::sync_wait(sockets[0].send(a_vole));
+    // cp::sync_wait(sockets[0].flush());
+
+    // cp::sync_wait(sockets[0].recvResize(c_vole));
+    // cp::sync_wait(sockets[0].flush());
+
+    // for (u64 i = 0; i < 1; i++) {
+    //   spdlog::debug("\t[recv] VOLE a_vole[{}] c {} ; a {}", i, c_vole[i],
+    //                 a_vole[i]);
+    // }
+
     SilentVoleReceiver<u32, u32> receiver;
     receiver.configure(numVole, SilentSecType::SemiHonest, DefaultMultType,
                        SilentBaseType::BaseExtend,
@@ -863,12 +879,13 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
           auto tmp_a_random_idx = bin_idx * a_random_stride + dim_index * 2;
           prefix_vals(val_index, 0) = a_random[tmp_a_random_idx];
           prefix_vals(val_index, METRIC) =
-              a_random[tmp_a_random_idx + METRIC] + fast_pow(diff, METRIC);
+              a_random[tmp_a_random_idx + 1] + fast_pow<u32>(diff, METRIC);
 
           auto tmp_avole_idx = bin_idx * vole_stride + dim_index * (METRIC - 1);
           for (u64 p_index = 1; p_index < METRIC; p_index++) {
             prefix_vals(val_index, p_index) =
-                a_vole[tmp_avole_idx + (p_index - 1)] + fast_pow(diff, p_index);
+                a_vole[tmp_avole_idx + (p_index - 1)] +
+                fast_pow<u32>(diff, p_index);
           }
 
           val_index++;
@@ -894,12 +911,13 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
           auto tmp_a_random_idx = bin_idx * a_random_stride + dim_index * 2;
           prefix_vals(val_index, 0) = a_random[tmp_a_random_idx];
           prefix_vals(val_index, METRIC) =
-              a_random[tmp_a_random_idx + METRIC] + fast_pow(diff, METRIC);
+              a_random[tmp_a_random_idx + 1] + fast_pow<u32>(diff, METRIC);
 
           auto tmp_avole_idx = bin_idx * vole_stride + dim_index * (METRIC - 1);
           for (u64 p_index = 1; p_index < METRIC; p_index++) {
             prefix_vals(val_index, p_index) =
-                a_vole[tmp_avole_idx + (p_index - 1)] + fast_pow(diff, p_index);
+                a_vole[tmp_avole_idx + (p_index - 1)] +
+                fast_pow<u32>(diff, p_index);
           }
 
           val_index++;
@@ -1046,7 +1064,7 @@ void FPSIRecv::ssIFMat_recv(const oc::span<u64> &v_sums) {
   /* ---------------------------------------------------------------------------*/
   // step 1: Recv ssIFMat Set_Dec
   /* ---------------------------------------------------------------------------*/
-  u64 threshold = fast_pow(DELTA, METRIC);
+  u64 threshold = fast_pow<u32>(DELTA, METRIC);
   auto prefix_param = IfMatchParamTable::getSelectedParam(threshold + 1);
 
   u64 a_random_size = bins_num;
