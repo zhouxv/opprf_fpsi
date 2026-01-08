@@ -33,7 +33,6 @@ public:
   PRNG recv_prng;
 
   // figure 8 dFmap protocol
-  PrefixParam DFMAP_PARAM;
   vector<block> dfmap_opprf_keys;
   vector<block> dfmap_opprf_values;
   vector<block> r_x_i;

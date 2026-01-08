@@ -31,7 +31,6 @@ public:
   PRNG sender_prng;
 
   // figure 8 dFmap protocol
-  PrefixParam DFMAP_PARAM;
   vector<block> t_y_j;
   vector<block> fig8_ID_ys;
 

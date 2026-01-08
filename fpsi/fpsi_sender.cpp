@@ -35,9 +35,6 @@
 #include <vector>
 
 void FPSISender::DFmap_fig8_offline() {
-  auto t = DELTA * 2 + 1;
-  DFMAP_PARAM = LpParamTable::getSelectedParam(t);
-
   // In our implementation, the probability that φ(x) equals 0 is high.
   u64 φ = 0;
 
@@ -109,7 +106,7 @@ void FPSISender::getID() {
   get_id_timer.end("sender_getid_random_enc");
   ipcl::terminateContext();
 
-  spdlog::debug("sender getID() random numbers computed");
+  spdlog::debug("\t[send] getID() random numbers computed");
 
   // Merge interval
   for (u64 dim_index = 0; dim_index < DIM; dim_index++) {
@@ -153,7 +150,7 @@ void FPSISender::getID() {
     intervals[dim_index] = merged_interval;
   }
 
-  spdlog::debug("getID() interval merge finished");
+  spdlog::debug("\t[send] getID() interval merge finished");
 
   // get idxs
   auto compare_lambda = [](const pair<u64, u64> &a, u64 value) {
@@ -180,7 +177,7 @@ void FPSISender::getID() {
     pt_index += 1;
   }
 
-  spdlog::debug("getID() idx computation completed");
+  spdlog::debug("\t[send] getID() idx computation completed");
 
   // get list encoding
   u64 okvs_mN = PTS_NUM * DIM * 2;
@@ -218,7 +215,7 @@ void FPSISender::getID() {
 
   fpsi_timer.merge(get_id_timer);
 
-  spdlog::debug("getID() computation completed");
+  spdlog::debug("\t[send] getID() computation completed");
 }
 
 void FPSISender::DFmap_fig9_offline() {

@@ -31,9 +31,6 @@
 #include <vector>
 
 void FPSIRecv::DFmap_fig8_offline() {
-  auto t = DELTA * 2 + 1;
-  DFMAP_PARAM = LpParamTable::getSelectedParam(t);
-
   // In our implementation, the probability that φ(x) equals 0 is high.
   u64 φ = 0;
 
@@ -86,7 +83,7 @@ void FPSIRecv::DFmap_fig8_offline() {
   padding_blocks(dfmap_opprf_keys, opprf_num);
   padding_blocks(dfmap_opprf_values, opprf_num);
 
-  spdlog::debug("[Recv  ] opprf_0_num: {}, dfmap_opprf_keys: {} ", opprf_num,
+  spdlog::debug("[Recv] opprf_0_num: {}, dfmap_opprf_keys: {} ", opprf_num,
                 dfmap_opprf_keys.size());
 }
 
@@ -138,7 +135,7 @@ void FPSIRecv::getID() {
   get_id_timer.end("recv_getid_random_enc");
   ipcl::terminateContext();
 
-  spdlog::debug("recv getID() random numbers computed");
+  spdlog::debug("\t[recv] getID() random numbers computed");
 
   // Merge interval
   for (u64 dim_index = 0; dim_index < DIM; dim_index++) {
@@ -182,7 +179,7 @@ void FPSIRecv::getID() {
     intervals[dim_index] = merged_interval;
   }
 
-  spdlog::debug("getID() interval merge finished");
+  spdlog::debug("\t[recv] getID() interval merge finished");
 
   // get idxs
   auto compare_lambda = [](const pair<u64, u64> &a, u64 value) {
@@ -209,7 +206,7 @@ void FPSIRecv::getID() {
     pt_index += 1;
   }
 
-  spdlog::debug("getID() idx computation completed");
+  spdlog::debug("\t[recv] getID() idx computation completed");
 
   // get list encoding
   u64 okvs_mN = PTS_NUM * DIM * 2;
@@ -245,7 +242,7 @@ void FPSIRecv::getID() {
                  get_id_encoding);
   get_id_timer.end("recv_getid_encoding");
 
-  spdlog::debug("getID() computation completed");
+  spdlog::debug("\t[recv] getID() computation completed");
 
   fpsi_timer.merge(get_id_timer);
 }
