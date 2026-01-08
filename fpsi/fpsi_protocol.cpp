@@ -136,19 +136,27 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 DELTA,
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   // Fmap Offline phase
   /*--------------------------------------------------------------------------------------------------------------------------------*/
-  timer.start();
-  if (FM_TYPE) {
-    sender.DFmap_fig8_offline();
-    recv.DFmap_fig8_offline();
-  } else {
-    if (FAKE) {
-      sender.DFmap_fig9_offline_fake();
-      recv.DFmap_fig9_offline_fake();
-    } else {
-      sender.DFmap_fig9_offline();
-      recv.DFmap_fig9_offline();
+  auto fmap_offline = [&](FPSISender &s, FPSIRecv &r, bool fm_type, bool fake) {
+    // figure 8 DFmap offline phase
+    if (fm_type) {
+      s.DFmap_fig8_offline();
+      r.DFmap_fig8_offline();
+      return;
     }
-  }
+    // figure 9 DFmap offline phase
+    if (fake) {
+      s.DFmap_fig9_offline_fake();
+      r.DFmap_fig9_offline_fake();
+      return;
+    } else {
+      s.DFmap_fig9_offline();
+      r.DFmap_fig9_offline();
+      return;
+    }
+  };
+
+  timer.start();
+  fmap_offline(sender, recv, FM_TYPE, FAKE);
   timer.end("protocol_offline");
   spdlog::info("Fmap Offline phase finished !!");
 
@@ -341,17 +349,31 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   // PSI Offline phase
   /*--------------------------------------------------------------------------------------------------------------------------------*/
-  timer.start();
-  if (FAKE) {
-    sender.psi_offline_fake();
-    recv.psi_offline_fake();
-  } else {
-    std::thread recv_offline(std::bind(&FPSIRecv::psi_offline, &recv));
-    std::thread send_offline(std::bind(&FPSISender::psi_offline, &sender));
-    recv_offline.join();
-    send_offline.join();
-  }
+  auto fpsi_offline = [&](FPSISender &s, FPSIRecv &r, bool fm_type, bool fake) {
+    // figure 8 PSI offline phase
+    if (fm_type) {
+      std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_fig8, &r));
+      std::thread send_offline(std::bind(&FPSISender::psi_offline_fig8, &s));
+      recv_offline.join();
+      send_offline.join();
+      return;
+    }
+    // figure 9 PSI offline phase
+    if (fake) {
+      s.psi_offline_fake();
+      r.psi_offline_fake();
+      return;
+    } else {
+      std::thread recv_offline(std::bind(&FPSIRecv::psi_offline, &r));
+      std::thread send_offline(std::bind(&FPSISender::psi_offline, &s));
+      recv_offline.join();
+      send_offline.join();
+      return;
+    }
+  };
 
+  timer.start();
+  fpsi_offline(sender, recv, FM_TYPE, FAKE);
   timer.end("protocol_offline");
   spdlog::info("PSI Offline phase finished !!");
 
@@ -359,10 +381,19 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   // PSI Online phase
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   timer.start();
-  std::thread recv_msg(std::bind(&FPSIRecv::psi_online, &recv));
-  std::thread send_msg(std::bind(&FPSISender::psi_online, &sender));
-  recv_msg.join();
-  send_msg.join();
+  if (FM_TYPE) {
+    // figure 8 PSI online phase
+    std::thread recv_msg(std::bind(&FPSIRecv::psi_online_fig8, &recv));
+    std::thread send_msg(std::bind(&FPSISender::psi_online_fig8, &sender));
+    recv_msg.join();
+    send_msg.join();
+  } else {
+    // figure 9 PSI online phase
+    std::thread recv_msg(std::bind(&FPSIRecv::psi_online, &recv));
+    std::thread send_msg(std::bind(&FPSISender::psi_online, &sender));
+    recv_msg.join();
+    send_msg.join();
+  }
   timer.end("protocol_online");
   spdlog::info("PSI Online phase finished !!");
 

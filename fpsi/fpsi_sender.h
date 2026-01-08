@@ -66,21 +66,22 @@ public:
     // sender_prng.SetSeed(block(123, 123));
   };
 
+  // Figure 8 dFmap
   void DFmap_fig8_offline();
   void DFmap_fig8_online();
 
+  // Figure 9 dFmap
   void getID();
   void DFmap_fig9_offline();
   void DFmap_fig9_offline_fake();
   void DFmap_fig9_online();
 
+  // Figure 9 PSI
   void psi_offline();
   void psi_offline_fake();
   void psi_online();
-
   template <CuckooTypes Mode> void mp_ssFMat_linf(CuckooIndex<Mode> &ct);
   template <CuckooTypes Mode> void mp_ssFMat_lp(CuckooIndex<Mode> &ct);
-
   void ssIFMat_send(const oc::span<u64> &u_sums);
 
   void DFmap_fig9_clear() {
@@ -94,5 +95,9 @@ public:
     mask_mul0_pt.clear();
   }
 
-  vector<u64> u_sums_;
+  // Figure 8 PSI
+  void psi_offline_fig8();
+  void psi_online_fig8();
+  template <CuckooTypes Mode> void mp_ssFMat_linf_fig8(CuckooIndex<Mode> &ct);
+  template <CuckooTypes Mode> void mp_ssFMat_lp_fig8(CuckooIndex<Mode> &ct);
 };

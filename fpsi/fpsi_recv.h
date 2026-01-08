@@ -71,18 +71,20 @@ public:
     // recv_prng.SetSeed(block(123, 456));
   };
 
+  // Figure 8 dFmap
   void DFmap_fig8_offline();
   void DFmap_fig8_online();
 
+  // Figure 9 dFmap
+  void getID();
   void DFmap_fig9_offline();
   void DFmap_fig9_offline_fake();
   void DFmap_fig9_online();
-  void getID();
 
+  // Figure 9 PSI
   void psi_offline();
   void psi_offline_fake();
   void psi_online();
-
   void mp_ssFMat_linf(SimpleIndex &st);
   void mp_ssFMat_lp(SimpleIndex &st);
   void ssIFMat_recv(const oc::span<u64> &v_sums);
@@ -98,5 +100,9 @@ public:
     mask_mul0_pt.clear();
   }
 
-  vector<u64> v_sums_;
+  // Figure 8 PSI
+  void psi_offline_fig8();
+  void psi_online_fig8();
+  void mp_ssFMat_linf_fig8(SimpleIndex &st);
+  void mp_ssFMat_lp_fig8(SimpleIndex &st);
 };
