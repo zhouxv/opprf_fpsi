@@ -412,7 +412,7 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   spdlog::info("*********************** Result ****************************");
   spdlog::info("PSI intersection size      : {}",
                recv.intersection_idxs_tmp.size());
-  cout << "psi size: " << recv.intersection_idxs_tmp.size() << endl;
+  // cout << "psi size: " << recv.intersection_idxs_tmp.size() << endl;
 
   spdlog::info("Offline time (s)           : {:.3f} ", offline_time / 1000.0);
   spdlog::info("Online time (s)            : {:.3f} ", online_time / 1000.0);
