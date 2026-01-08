@@ -83,8 +83,9 @@ void FPSIRecv::DFmap_fig8_offline() {
   padding_blocks(dfmap_opprf_keys, opprf_num);
   padding_blocks(dfmap_opprf_values, opprf_num);
 
-  spdlog::debug("[Recv] opprf_0_num: {}, dfmap_opprf_keys: {} ", opprf_num,
-                dfmap_opprf_keys.size());
+  // spdlog::debug("[Recv] opprf_0_num: {}, dfmap_opprf_keys: {} ", opprf_num,
+  //               dfmap_opprf_keys.size());
+  spdlog::info("\tRecv DFmap_fig8_offline finished");
 }
 
 void FPSIRecv::DFmap_fig8_online() {
@@ -98,7 +99,8 @@ void FPSIRecv::DFmap_fig8_online() {
   coproto::sync_wait(sender.send(opprf_size_other, dfmap_opprf_keys,
                                  dfmap_opprf_values, recv_prng, 1, sockets[0]));
 
-  spdlog::debug("recv fig8 ids size: {}", fig8_ID_xr.size());
+  // spdlog::debug("recv fig8 ids size: {}", fig8_ID_xr.size());
+  spdlog::info("\tRecv DFmap_fig8_online finished");
 }
 
 /*
@@ -241,8 +243,7 @@ void FPSIRecv::getID() {
   rb_okvs.encode(get_id_keys, get_id_values, value_block_length,
                  get_id_encoding);
   get_id_timer.end("recv_getid_encoding");
-
-  spdlog::debug("\t[recv] getID() computation completed");
+  spdlog::debug("\t[recv] getID() encoding finished");
 
   fpsi_timer.merge(get_id_timer);
 }
@@ -253,7 +254,7 @@ void FPSIRecv::DFmap_fig9_offline() {
   fig9_offline.start();
   getID();
   fig9_offline.end("recv_offline_getid");
-  spdlog::debug("\t[recv] getID finished");
+  spdlog::debug("\t[recv] getID() finished");
 
   fm_mask.resize(PTS_NUM + 1, 0);
   vector<u64> fm_mask_mul0(PTS_NUM, 0);
@@ -282,8 +283,10 @@ void FPSIRecv::DFmap_fig9_offline() {
   fig9_offline.end("recv_offline_ids_enc");
 
   ipcl::terminateContext();
+  spdlog::debug("\t[recv] IDs_ct and mask_mul0_pt computed");
 
   fpsi_timer.merge(fig9_offline);
+  spdlog::info("\tRecv DFmap_fig9_offline finished");
 }
 
 void FPSIRecv::DFmap_fig9_offline_fake() {
@@ -332,7 +335,7 @@ void FPSIRecv::DFmap_fig9_offline_fake() {
 
   ipcl::terminateContext();
 
-  spdlog::debug("\t[recv] DFmap_fig9_offline_fake finished");
+  spdlog::info("\tRecv DFmap_fig9_offline_fake finished");
 }
 
 void FPSIRecv::DFmap_fig9_online() {
@@ -467,6 +470,8 @@ void FPSIRecv::DFmap_fig9_online() {
     fig9_ID_xr[i] = send_w_mul_mask[i] / (u128)fm_mask[i + 1];
   }
   spdlog::debug("\t[recv] fig9_ID_xr computed finished");
+
+  spdlog::info("\tRecv DFmap_fig9_online finished");
 }
 
 void FPSIRecv::psi_offline() {
@@ -515,6 +520,7 @@ void FPSIRecv::psi_offline() {
   }
 
   fpsi_timer.merge(psi_offline_timer);
+  spdlog::info("  Recv psi_offline finished");
 }
 
 void FPSIRecv::psi_offline_fake() {
@@ -531,6 +537,8 @@ void FPSIRecv::psi_offline_fake() {
     recv_prng.get<u32>(a_vole.data(), a_vole.size());
     recv_prng.get<u32>(c_vole.data(), c_vole.size());
   }
+
+  spdlog::info("  Recv psi_offline_fake finished");
 }
 
 void FPSIRecv::psi_online() {
@@ -725,8 +733,8 @@ void FPSIRecv::mp_ssFMat_linf(SimpleIndex &st) {
     padding_keys(prefix_vals, opprf_size);
 
     if (dim_index == 0)
-      spdlog::info("\t[recv] mp_ssFMat thread [{}] —— step1 getlist finished!",
-                   dim_index);
+      spdlog::debug("\t[recv] mp_ssFMat thread [{}] —— step1 getlist finished!",
+                    dim_index);
 
     /* ---------------------------------------------------------------------------*/
     // step 3: bOPPRF RsOpprfSender
@@ -745,7 +753,7 @@ void FPSIRecv::mp_ssFMat_linf(SimpleIndex &st) {
     insert_commus(fmt::format("recv_{}_fmat_step3", dim_index), dim_index);
 
     if (dim_index == 0)
-      spdlog::info(
+      spdlog::debug(
           "\t[recv] mp_ssFMat thread [{}] —— step3 RsOpprfSender finished!",
           dim_index);
 
@@ -764,7 +772,7 @@ void FPSIRecv::mp_ssFMat_linf(SimpleIndex &st) {
     insert_commus(fmt::format("recv_{}_fmat_step4", dim_index), dim_index);
 
     if (dim_index == 0)
-      spdlog::info(
+      spdlog::debug(
           "\t[recv] mp_ssFMat thread [{}] —— step4 RsOpprfReceiver finished!",
           dim_index);
 
@@ -943,8 +951,9 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
                     opprf_size);
 
     if (dim_index == 0)
-      spdlog::info("\t[recv] mp_ssFMat thread [{}] —— step1 getlist finished !",
-                   dim_index);
+      spdlog::debug(
+          "\t[recv] mp_ssFMat thread [{}] —— step1 getlist finished !",
+          dim_index);
 
     /*---------------------------------------------------------------------------*/
     // step 3: bOPPRF RsOpprfSender
@@ -963,7 +972,7 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
     insert_commus(fmt::format("recv_{}_fmat_step3", dim_index), dim_index);
 
     if (dim_index == 0)
-      spdlog::info(
+      spdlog::debug(
           "\t[recv] mp_ssFMat thread [{}] —— step3 RsOpprfSender finished!",
           dim_index);
 
@@ -986,7 +995,7 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
     insert_commus(fmt::format("recv_{}_pis_step4", dim_index), dim_index);
 
     if (dim_index == 0)
-      spdlog::info(
+      spdlog::debug(
           "\t[recv] mp_ssFMat thread [{}] —— step4 PIS sender finished!",
           dim_index);
 
