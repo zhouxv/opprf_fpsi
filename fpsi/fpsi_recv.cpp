@@ -30,79 +30,6 @@
 #include <spdlog/spdlog.h>
 #include <vector>
 
-void FPSIRecv::DFmap_fig8_offline() {
-  // In our implementation, the probability that φ(x) equals 0 is high.
-  u64 φ = 0;
-
-  // Generate r_x_i
-  r_x_i.resize(PTS_NUM * DIM);
-  recv_prng.get(r_x_i.data(), PTS_NUM * DIM);
-  fig8_ID_xr = r_x_i;
-
-  // Generate x_i_s
-  vector<pair<u64, u64>> x_i_s(PTS_NUM * DIM);
-
-  for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
-    for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
-
-      u64 temp0 = (pts[pt_idx][dim_idx] - SIDE_LEN) / SIDE_LEN;
-      u64 temp1 = pts[pt_idx][dim_idx] / SIDE_LEN;
-
-      x_i_s[pt_idx * DIM + dim_idx] = make_pair(temp0, temp1);
-    }
-  }
-
-  // Generate dfmap_opprf_keys and dfmap_opprf_values
-  auto opprf_num = 4 * PTS_NUM * DIM;
-  dfmap_opprf_keys.reserve(opprf_num);
-  dfmap_opprf_values.reserve(opprf_num);
-
-  // Generate dfmap_opprf_keys and dfmap_opprf_values
-  for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
-    for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
-      block keys[4];
-      keys[0] = get_fmap_opprf_key(φ, x_i_s[pt_idx * DIM + φ].first, dim_idx,
-                                   x_i_s[pt_idx * DIM + dim_idx].first);
-      keys[1] = get_fmap_opprf_key(φ, x_i_s[pt_idx * DIM + φ].first, dim_idx,
-                                   x_i_s[pt_idx * DIM + dim_idx].second);
-      keys[2] = get_fmap_opprf_key(φ, x_i_s[pt_idx * DIM + φ].second, dim_idx,
-                                   x_i_s[pt_idx * DIM + dim_idx].first);
-      keys[3] = get_fmap_opprf_key(φ, x_i_s[pt_idx * DIM + φ].second, dim_idx,
-                                   x_i_s[pt_idx * DIM + dim_idx].second);
-
-      unordered_set<block> seen_keys;
-      for (int i = 0; i < 4; i++) {
-        if (seen_keys.insert(keys[i]).second) {
-          dfmap_opprf_keys.push_back(keys[i]);
-          dfmap_opprf_values.push_back(r_x_i[pt_idx * DIM + dim_idx]);
-        }
-      }
-    }
-  }
-
-  padding_blocks(dfmap_opprf_keys, opprf_num);
-  padding_blocks(dfmap_opprf_values, opprf_num);
-
-  // spdlog::debug("[Recv] opprf_0_num: {}, dfmap_opprf_keys: {} ", opprf_num,
-  //               dfmap_opprf_keys.size());
-  spdlog::info("\tRecv DFmap_fig8_offline finished");
-}
-
-void FPSIRecv::DFmap_fig8_online() {
-  u64 opprf_size = dfmap_opprf_keys.size();
-  u64 opprf_size_other;
-  coproto::sync_wait(sockets[0].send(opprf_size));
-  coproto::sync_wait(sockets[0].recv(opprf_size_other));
-
-  RsOpprfSender sender;
-
-  coproto::sync_wait(sender.send(opprf_size_other, dfmap_opprf_keys,
-                                 dfmap_opprf_values, recv_prng, 1, sockets[0]));
-
-  // spdlog::debug("recv fig8 ids size: {}", fig8_ID_xr.size());
-  spdlog::info("\tRecv DFmap_fig8_online finished");
-}
-
 /*
 For avoiding value overflow, we use the following method to compute IDs:
 1. random_values is u32 type (recv_prng.get<u32>() >> bits_num).
@@ -550,7 +477,6 @@ void FPSIRecv::psi_online() {
   psi_online_timer.start();
   DFmap_fig9_online();
   psi_online_timer.end("recv_DFmap_fig9_online");
-  // DFmap_fig9_clear();
   spdlog::info("  Recv step1: fmap finished!");
 
   /* ---------------------------------------------------------------------------*/
@@ -1138,6 +1064,82 @@ void FPSIRecv::ssIFMat_recv(const oc::span<u64> &v_sums) {
   spdlog::debug("\t  [recv] ssIFMat —— step4 Batch_PEQT_recv finished! ");
 }
 
+/*
+fig8 (d,d)-UFmap
+*/
+void FPSIRecv::DFmap_fig8_offline() {
+  // In our implementation, the probability that φ(x) equals 0 is high.
+  u64 φ = 0;
+
+  // Generate r_x_i
+  r_x_i.resize(PTS_NUM * DIM);
+  recv_prng.get(r_x_i.data(), PTS_NUM * DIM);
+  fig8_ID_xr = r_x_i;
+
+  // Generate x_i_s
+  vector<pair<u64, u64>> x_i_s(PTS_NUM * DIM);
+
+  for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
+    for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
+
+      u64 temp0 = (pts[pt_idx][dim_idx] - SIDE_LEN) / SIDE_LEN;
+      u64 temp1 = pts[pt_idx][dim_idx] / SIDE_LEN;
+
+      x_i_s[pt_idx * DIM + dim_idx] = make_pair(temp0, temp1);
+    }
+  }
+
+  // Generate dfmap_opprf_keys and dfmap_opprf_values
+  auto opprf_num = 4 * PTS_NUM * DIM;
+  dfmap_opprf_keys.reserve(opprf_num);
+  dfmap_opprf_values.reserve(opprf_num);
+
+  // Generate dfmap_opprf_keys and dfmap_opprf_values
+  for (u64 pt_idx = 0; pt_idx < PTS_NUM; pt_idx++) {
+    for (u64 dim_idx = 0; dim_idx < DIM; dim_idx++) {
+      block keys[4];
+      keys[0] = get_fmap_opprf_key(φ, x_i_s[pt_idx * DIM + φ].first, dim_idx,
+                                   x_i_s[pt_idx * DIM + dim_idx].first);
+      keys[1] = get_fmap_opprf_key(φ, x_i_s[pt_idx * DIM + φ].first, dim_idx,
+                                   x_i_s[pt_idx * DIM + dim_idx].second);
+      keys[2] = get_fmap_opprf_key(φ, x_i_s[pt_idx * DIM + φ].second, dim_idx,
+                                   x_i_s[pt_idx * DIM + dim_idx].first);
+      keys[3] = get_fmap_opprf_key(φ, x_i_s[pt_idx * DIM + φ].second, dim_idx,
+                                   x_i_s[pt_idx * DIM + dim_idx].second);
+
+      unordered_set<block> seen_keys;
+      for (int i = 0; i < 4; i++) {
+        if (seen_keys.insert(keys[i]).second) {
+          dfmap_opprf_keys.push_back(keys[i]);
+          dfmap_opprf_values.push_back(r_x_i[pt_idx * DIM + dim_idx]);
+        }
+      }
+    }
+  }
+
+  padding_blocks(dfmap_opprf_keys, opprf_num);
+  padding_blocks(dfmap_opprf_values, opprf_num);
+
+  // spdlog::debug("[Recv] opprf_0_num: {}, dfmap_opprf_keys: {} ", opprf_num,
+  //               dfmap_opprf_keys.size());
+  spdlog::info("\tRecv DFmap_fig8_offline finished");
+}
+
+void FPSIRecv::DFmap_fig8_online() {
+  u64 opprf_size = dfmap_opprf_keys.size();
+  u64 opprf_size_other;
+  coproto::sync_wait(sockets[0].send(opprf_size));
+  coproto::sync_wait(sockets[0].recv(opprf_size_other));
+
+  RsOpprfSender sender;
+
+  coproto::sync_wait(sender.send(opprf_size_other, dfmap_opprf_keys,
+                                 dfmap_opprf_values, recv_prng, 1, sockets[0]));
+
+  // spdlog::debug("recv fig8 ids size: {}", fig8_ID_xr.size());
+  spdlog::info("\tRecv DFmap_fig8_online finished");
+}
+
 void FPSIRecv::psi_offline_fig8() {
   simpleTimer psi_offline_timer;
   psi_offline_timer.start();
@@ -1520,7 +1522,7 @@ void FPSIRecv::mp_ssFMat_lp_fig8(SimpleIndex &st) {
             block hash_out;
             u64 bin_idx = tmp_idxs[id_idx][k];
             blake3_hasher_update(&hasher, x0_prefix.data(), x0_prefix.size());
-            blake3_hasher_update(&hasher, &fig8_ID_xr[id_idx], sizeof(block));
+            blake3_hasher_update(&hasher, &sh_ID_xr[id_idx], sizeof(block));
             blake3_hasher_update(&hasher, &k, sizeof(u64));
             blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
             blake3_hasher_update(&hasher, &sigma0, sizeof(u64));
@@ -1556,7 +1558,7 @@ void FPSIRecv::mp_ssFMat_lp_fig8(SimpleIndex &st) {
             block hash_out;
             u64 bin_idx = tmp_idxs[id_idx][k];
             blake3_hasher_update(&hasher, x1_prefix.data(), x1_prefix.size());
-            blake3_hasher_update(&hasher, &fig8_ID_xr[id_idx], sizeof(block));
+            blake3_hasher_update(&hasher, &sh_ID_xr[id_idx], sizeof(block));
             blake3_hasher_update(&hasher, &k, sizeof(u64));
             blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
             blake3_hasher_update(&hasher, &sigma1, sizeof(u64));
@@ -1711,6 +1713,573 @@ void FPSIRecv::mp_ssFMat_lp_fig8(SimpleIndex &st) {
   fmat_timer.end("recv_fmat_fig8_step5_ssifmat_lp");
 
   insert_commus("recv_fmat_fig8_step5_ssifmat_lp", 0);
+
+  fpsi_timer.merge(fmat_timer);
+}
+
+/*
+(1,2^d)-UFmap spatial hash PSI
+*/
+void FPSIRecv::psi_offline_sh() {
+  simpleTimer psi_offline_timer;
+
+  /*
+  sh_fmap_offline
+  */
+  psi_offline_timer.start();
+  sh_ID_xr.reserve(PTS_NUM * BLK_CELLS);
+  for (auto pt : pts) {
+    auto cells =
+        intersection(pt, METRIC, DIM, DELTA, SIDE_LEN, BLK_CELLS, DELTA_L2);
+    for (auto cell : cells) {
+      sh_ID_xr.push_back(get_blk_from_cell(cell));
+    }
+  }
+  spdlog::info("sh_ID_xr size:{}", sh_ID_xr.size());
+  psi_offline_timer.end("recv_offline_fmap_sh");
+
+  /*
+  slient VOLE recv
+  */
+  if (METRIC > 1) {
+    CuckooIndex<ThreadSafe> ct;
+    ct.init(PTS_NUM * BLK_CELLS, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+    u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
+
+    a_vole.resize(numVole);
+    c_vole.resize(numVole);
+
+    SilentVoleReceiver<u32, u32> receiver;
+    receiver.configure(numVole, SilentSecType::SemiHonest, DefaultMultType,
+                       SilentBaseType::BaseExtend,
+                       SdNoiseDistribution::Regular);
+
+    psi_offline_timer.start();
+    auto proto = receiver.silentReceive(a_vole, c_vole, recv_prng, sockets[0]);
+    cp::sync_wait(proto);
+    psi_offline_timer.end("recv_offline_vole_recv");
+    spdlog::info("\t[Recv] VOLE recv finished!");
+
+    sockets[0].mImpl->mBytesReceived = 0;
+    sockets[0].mImpl->mBytesSent = 0;
+  }
+
+  fpsi_timer.merge(psi_offline_timer);
+  spdlog::info("  Recv psi_offline_sh finished");
+}
+
+void FPSIRecv::psi_online_sh() {
+  simpleTimer psi_online_timer;
+
+  /* ---------------------------------------------------------------------------*/
+  // step 1: (1,2^d)-DFmap spatial recv
+  /* ---------------------------------------------------------------------------*/
+  spdlog::info("  Recv step1: (1,2^d)-DFmap-spatial finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 2: recv simple hash
+  /* ---------------------------------------------------------------------------*/
+  u64 balls_num = sh_ID_xr.size(); // ids_num=PTS_NUM * (1 << DIM)
+
+  psi_online_timer.start();
+  CuckooIndex<ThreadSafe> cuckoo_table;
+  cuckoo_table.init(balls_num, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+  SimpleIndex simple_table;
+  simple_table.init(cuckoo_table.mNumBins, balls_num);
+
+  simple_table.insert(sh_ID_xr);
+  psi_online_timer.end("recv_simple_hash");
+
+  // for (u64 i = 0; i < 5; i++) {
+  //   spdlog::debug("\t[send] simple index: {}, value: {}, hashindex:{} {} {}",
+  //   i,
+  //                 ids_blks[i], simple_table.mLocations(i, 0),
+  //                 simple_table.mLocations(i, 1), simple_table.mLocations(i,
+  //                 2));
+
+  //   for (u64 j = 0; j < simple_table.mMaxBinSize; j++) {
+  //     spdlog::debug(
+  //         "simple hash bin [{}] {} {}", simple_table.mLocations(i, 0),
+  //         simple_table.mBins(simple_table.mLocations(i, 0), j).hashIdx(),
+  //         simple_table.mBins(simple_table.mLocations(i, 0), j).idx());
+  //   }
+  // }
+
+  // simple_table.print();
+
+  spdlog::debug(
+      "\t[recv] simple num_balls: {} , num_bins : {}, bin_max_size : {}",
+      balls_num, simple_table.mNumBins, simple_table.mMaxBinSize);
+
+  spdlog::info("  Recv step2: simple hash finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 3: recv mp_ssFMat
+  /* ---------------------------------------------------------------------------*/
+  psi_online_timer.start();
+  if (METRIC == 0) {
+    mp_ssFMat_linf_sh(simple_table);
+  } else {
+    mp_ssFMat_lp_sh(simple_table);
+  }
+  psi_online_timer.end("recv_ssFmat_sh");
+
+  spdlog::info("  Recv step3: mp_ssFMath_L{}_sh finished!",
+               (METRIC == 0) ? "inf" : std::to_string(METRIC));
+
+  /* ---------------------------------------------------------------------------*/
+  // step 4: recv PSI OT
+  /* ---------------------------------------------------------------------------*/
+  SilentOtExtReceiver s_ot_recv;
+  u64 numOTs = cuckoo_table.mNumBins;
+  s_ot_recv.configure(numOTs, 2, 1, SilentSecType::SemiHonest,
+                      SdNoiseDistribution::Regular, DefaultMultType);
+
+  //  gen baseOT
+  coproto::sync_wait(s_ot_recv.genBaseCors(recv_prng, sockets[0]));
+
+  std::vector<block> ot_messages(numOTs);
+
+  psi_online_timer.start();
+  // gen randomOT
+  auto proto = s_ot_recv.receive(ee, ot_messages, recv_prng, sockets[0]);
+  // auto protocol = s_ot_recv.silentReceive(ee, ot_messages, recv_prng,
+  //                                         sockets[0], OTType::Correlated);
+  cp::sync_wait(proto);
+
+  // randomOT -> OT
+  vector<block> mask_msg_0(numOTs);
+  vector<block> mask_msg_1(numOTs);
+  coproto::sync_wait(sockets[0].recv(mask_msg_0));
+  coproto::sync_wait(sockets[0].recv(mask_msg_1));
+
+  vector<block> recvMsgs(numOTs);
+  for (u64 i = 0; i < numOTs; i++) {
+    recvMsgs[i] = (ee[i]) ? (ot_messages[i] ^ mask_msg_1[i])
+                          : (ot_messages[i] ^ mask_msg_0[i]);
+  }
+  psi_online_timer.end("recv_psi_ot");
+  insert_commus("recv_psi_ot", 0);
+
+  spdlog::info("  Recv step4: recv OTs finished!");
+
+  psi_online_timer.start();
+  std::unordered_set<block> find_table;
+  for (u64 i = 0; i < sh_ID_xr.size(); i++) {
+    find_table.insert(sh_ID_xr[i]);
+  }
+
+  // lookup
+  for (auto msg : recvMsgs) {
+    auto it = find_table.find(msg);
+    if (it != find_table.end()) {
+      intersection_idxs_tmp.push_back(0); // dummy value
+    }
+  }
+
+  // intersection_idxs_tmp = intersection_idxs;
+  psi_online_timer.end("recv_psi_intersection");
+
+  fpsi_timer.merge(psi_online_timer);
+}
+
+void FPSIRecv::mp_ssFMat_linf_sh(SimpleIndex &st) {
+  simpleTimer fmat_timer;
+
+  // get set_dec and set_prefix param
+  auto prefix_param = LinfParamTable::getSelectedParam(2 * DELTA + 1);
+
+  u64 balls_num = sh_ID_xr.size();
+  u64 bins_num = st.mNumBins;
+  auto &tmp_idxs = st.mLocations;
+
+  u64 a_random_size = bins_num * DIM;
+  vector<block> a_random(a_random_size);
+  recv_prng.get(a_random.data(), a_random_size);
+
+  oc::Matrix<block> rr_vals(DIM, bins_num, osuCrypto::AllocType::Zeroed);
+
+  auto dim_thread = [&](u64 dim_index) {
+    simpleTimer dim_thread_timer;
+    PRNG prng(oc::sysRandomSeed());
+
+    /* ---------------------------------------------------------------------------*/
+    // step 1: recv getList
+    /* ---------------------------------------------------------------------------*/
+    vector<block> prefix_keys;
+    vector<block> prefix_vals;
+    u64 opprf_size(prefix_param.second * balls_num * NUM_HASH_FUNC);
+    prefix_keys.reserve(opprf_size);
+    prefix_vals.reserve(opprf_size);
+
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+
+    for (u64 i = 0; i < PTS_NUM; i++) {
+      auto prefixs = set_dec(pts[i][dim_index] - DELTA,
+                             pts[i][dim_index] + DELTA, prefix_param.first);
+      for (u64 idx = 0; idx < BLK_CELLS; idx++) {
+        u64 id_idx = i * BLK_CELLS + idx;
+        for (u64 k = 0; k < NUM_HASH_FUNC; k++) {
+          for (auto prefix : prefixs) {
+            block hash_out;
+            u64 bin_idx = tmp_idxs[id_idx][k];
+            blake3_hasher_update(&hasher, prefix.data(), prefix.size());
+            blake3_hasher_update(&hasher, &sh_ID_xr[id_idx], sizeof(block));
+            blake3_hasher_update(&hasher, &k, sizeof(u64));
+            blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+            blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+            blake3_hasher_reset(&hasher);
+            prefix_keys.push_back(hash_out);
+            prefix_vals.push_back(a_random[dim_index * bins_num + bin_idx]);
+          }
+        }
+      }
+    }
+
+    // spdlog::debug("\t[recv] mp_ssFMat thread [{}] —— keys size: {} , value "
+    //               "size : {}; expect size : {} ",
+    //               dim_index, prefix_keys.size(), prefix_vals.size(),
+    //               opprf_size);
+
+    padding_keys(prefix_keys, opprf_size);
+    padding_keys(prefix_vals, opprf_size);
+
+    if (dim_index == 0)
+      spdlog::debug(
+          "\t[recv] mp_ssFMat_sh thread [{}] —— step1 getlist finished!",
+          dim_index);
+
+    /* ---------------------------------------------------------------------------*/
+    // step 3: bOPPRF RsOpprfSender
+    /* ---------------------------------------------------------------------------*/
+    u64 opprf_size_other;
+    coproto::sync_wait(sockets[dim_index].send(opprf_size));
+    coproto::sync_wait(sockets[dim_index].recv(opprf_size_other));
+
+    RsOpprfSender opprf_sender;
+
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_sender.send(opprf_size_other, prefix_keys,
+                                         prefix_vals, prng, 1,
+                                         sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_sh_step3_opprf", dim_index));
+    insert_commus(fmt::format("recv_{}_fmat_sh_step3", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::debug("\t[recv] mp_ssFMat_sh thread [{}] —— step3 "
+                    "RsOpprfSender finished!",
+                    dim_index);
+
+    /* ---------------------------------------------------------------------------*/
+    // step 4: bOPPRF RsOpprfReceiver
+    /* ---------------------------------------------------------------------------*/
+    RsOpprfReceiver opprf_recv;
+
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_recv.receive(
+        opprf_size_other,
+        coproto::span<block>(a_random.data() + bins_num * dim_index, bins_num),
+        rr_vals[dim_index], prng, 1, sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_sh_step4_opprf", dim_index));
+
+    insert_commus(fmt::format("recv_{}_fmat_sh_step4", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::debug("\t[recv] mp_ssFMat_sh thread [{}] —— step4 "
+                    "RsOpprfReceiver finished!",
+                    dim_index);
+
+    fpsi_timer.merge(dim_thread_timer);
+  };
+
+  vector<thread> dim_threads;
+  fmat_timer.start();
+  // start dim threads
+  for (u64 t = 0; t < DIM; t++) {
+    dim_threads.emplace_back(dim_thread, t);
+  }
+
+  // wait for getList threads
+  for (auto &th : dim_threads) {
+    th.join();
+  }
+
+  /* ---------------------------------------------------------------------------*/
+  // step 5: recv ssPEQT
+  /* ---------------------------------------------------------------------------*/
+  vector<block> rr_vals_sums(bins_num, ZeroBlock);
+  for (u64 i = 0; i < rr_vals_sums.size(); i++) {
+    for (u64 j = 0; j < DIM; j++) {
+      rr_vals_sums[i] ^= rr_vals(j, i);
+    }
+  }
+
+  fmat_timer.start();
+  auto e = Batch_PEQT_recv<block>(rr_vals_sums, sockets[0]);
+  ee = sync_wait(e);
+  fmat_timer.end("recv_fmat_sh_step5_batch_peqt");
+  insert_commus("recv_fmat_sh_step5_batch_peqt", 0);
+
+  // for (u64 i = 0; i < 10; i++) {
+  //   spdlog::debug("recv bins[{}] {} {}", i, rr_vals_sums[i], ee[i]);
+  // }
+
+  fmat_timer.end("recv_fmat_sh_threads_all");
+
+  fpsi_timer.merge(fmat_timer);
+}
+
+void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
+  simpleTimer fmat_timer;
+
+  // get set_dec and set_prefix param
+  auto delta_plus_param = LpParamTable::getSelectedParam(DELTA + 1);
+  auto delta_param = LpParamTable::getSelectedParam(DELTA);
+
+  u64 balls_num = sh_ID_xr.size();
+
+  // obtain tmp idxs
+  auto &tmp_idxs = st.mLocations;
+
+  // prepare getList a_random
+  u64 bins_num = st.mNumBins;
+  // a0 and ap
+  u64 a_random_size = bins_num * DIM * 2;
+
+  // generate a_random
+  vector<u32> a_random(a_random_size);
+  for (u64 i = 0; i < a_random_size; i++) {
+    a_random[i] = recv_prng.get<u32>() >> 1;
+  }
+  u64 a_random_stride = DIM * 2;
+  u64 vole_stride = DIM * (METRIC - 1);
+
+  // prepare v_
+  oc::Matrix<u32> v_(bins_num, DIM);
+
+  auto dim_thread = [&](u64 dim_index) {
+    simpleTimer dim_thread_timer;
+    PRNG prng(oc::sysRandomSeed());
+
+    /*---------------------------------------------------------------------------*/
+    // step 1: recv getList_lp
+    /*---------------------------------------------------------------------------*/
+    u64 opprf_size((delta_plus_param.second + delta_param.second) * balls_num *
+                   NUM_HASH_FUNC);
+    vector<block> prefix_keys;
+    oc::Matrix<u32> prefix_vals(opprf_size, METRIC + 1);
+    prefix_keys.reserve(opprf_size);
+
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+    u64 val_index = 0;
+    u64 sigma0(0), sigma1(1);
+    for (u64 i = 0; i < PTS_NUM; i++) {
+      auto pt_dim = pts[i][dim_index];
+      auto x_0 = set_dec(pt_dim - DELTA, pt_dim, delta_plus_param.first);
+      auto x_1 = set_dec(pt_dim + 1, pt_dim + DELTA, delta_param.first);
+
+      // key = H(prefix || ID_xr || k || bin_idx || σ=0)
+      for (auto x0_prefix : x_0) {
+        auto x_star_0 = up_bound(x0_prefix);
+        auto diff = pt_dim - x_star_0;
+        for (u64 idx = 0; idx < BLK_CELLS; idx++) {
+          u64 id_idx = i * BLK_CELLS + idx;
+          for (u64 k = 0; k < NUM_HASH_FUNC; k++) {
+            block hash_out;
+            u64 bin_idx = tmp_idxs[id_idx][k];
+            blake3_hasher_update(&hasher, x0_prefix.data(), x0_prefix.size());
+            blake3_hasher_update(&hasher, &sh_ID_xr[id_idx], sizeof(block));
+            blake3_hasher_update(&hasher, &k, sizeof(u64));
+            blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+            blake3_hasher_update(&hasher, &sigma0, sizeof(u64));
+            blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+            blake3_hasher_reset(&hasher);
+            prefix_keys.push_back(hash_out);
+
+            auto tmp_a_random_idx = bin_idx * a_random_stride + dim_index * 2;
+            prefix_vals(val_index, 0) = a_random[tmp_a_random_idx];
+            prefix_vals(val_index, METRIC) =
+                a_random[tmp_a_random_idx + 1] + fast_pow<u32>(diff, METRIC);
+
+            auto tmp_avole_idx =
+                bin_idx * vole_stride + dim_index * (METRIC - 1);
+            for (u64 p_index = 1; p_index < METRIC; p_index++) {
+              prefix_vals(val_index, p_index) =
+                  a_vole[tmp_avole_idx + (p_index - 1)] +
+                  fast_pow<u32>(diff, p_index);
+            }
+
+            val_index++;
+          }
+        }
+      }
+
+      // key = H(prefix || ID_xr || k || bin_idx || σ=1)
+      for (auto x1_prefix : x_1) {
+        auto x_star_1 = low_bound(x1_prefix);
+        auto diff = x_star_1 - pt_dim;
+        for (u64 idx = 0; idx < BLK_CELLS; idx++) {
+          u64 id_idx = i * BLK_CELLS + idx;
+          for (u64 k = 0; k < NUM_HASH_FUNC; k++) {
+            block hash_out;
+            u64 bin_idx = tmp_idxs[id_idx][k];
+            blake3_hasher_update(&hasher, x1_prefix.data(), x1_prefix.size());
+            blake3_hasher_update(&hasher, &sh_ID_xr[id_idx], sizeof(block));
+            blake3_hasher_update(&hasher, &k, sizeof(u64));
+            blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+            blake3_hasher_update(&hasher, &sigma1, sizeof(u64));
+            blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+            blake3_hasher_reset(&hasher);
+            prefix_keys.push_back(hash_out);
+
+            auto tmp_a_random_idx = bin_idx * a_random_stride + dim_index * 2;
+            prefix_vals(val_index, 0) = a_random[tmp_a_random_idx];
+            prefix_vals(val_index, METRIC) =
+                a_random[tmp_a_random_idx + 1] + fast_pow<u32>(diff, METRIC);
+
+            auto tmp_avole_idx =
+                bin_idx * vole_stride + dim_index * (METRIC - 1);
+            for (u64 p_index = 1; p_index < METRIC; p_index++) {
+              prefix_vals(val_index, p_index) =
+                  a_vole[tmp_avole_idx + (p_index - 1)] +
+                  fast_pow<u32>(diff, p_index);
+            }
+
+            val_index++;
+          }
+        }
+      }
+    }
+
+    // if (dim_index == 0)
+    //   spdlog::debug("\t[recv] mp_ssFMat thread [{}] —— keys size: {} , value
+    //   "
+    //                 "size : {}; expect size : {} ",
+    //                 dim_index, prefix_keys.size(), prefix_vals.size(),
+    //                 opprf_size);
+
+    // padding matrix vals
+    prng.get(prefix_vals.data() + prefix_keys.size() * (METRIC + 1),
+             (opprf_size - prefix_keys.size()) * (METRIC + 1));
+
+    // padding keys and vals
+    padding_keys(prefix_keys, opprf_size);
+
+    if (dim_index == 0) {
+      spdlog::debug(
+          "\t[recv] mp_ssFMat_sh thread [{}] —— keys size: {} , value "
+          "size : {}; expect size : {} ",
+          dim_index, prefix_keys.size(), prefix_vals.size(), opprf_size);
+      spdlog::debug(
+          "\t[recv] mp_ssFMat_sh thread [{}] —— step1 getlist finished !",
+          dim_index);
+    }
+
+    /*---------------------------------------------------------------------------*/
+    // step 3: bOPPRF RsOpprfSender
+    /*---------------------------------------------------------------------------*/
+    u64 opprf_size_other;
+    coproto::sync_wait(sockets[dim_index].send(opprf_size));
+    coproto::sync_wait(sockets[dim_index].recv(opprf_size_other));
+
+    RsOpprfSender opprf_sender;
+
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_sender.send(opprf_size_other, prefix_keys,
+                                         prefix_vals, prng, 1,
+                                         sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_sh_step3_opprf", dim_index));
+    insert_commus(fmt::format("recv_{}_fmat_sh_step3", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::debug("\t[recv] mp_ssFMat_sh thread [{}] —— step3 "
+                    "RsOpprfSender finished!",
+                    dim_index);
+
+    /*---------------------------------------------------------------------------*/
+    // step 4: PIS sender
+    /*---------------------------------------------------------------------------*/
+    vector<u32> a0(bins_num);
+    for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
+      a0[bin_idx] = a_random[bin_idx * a_random_stride + dim_index * 2];
+    }
+    u64 batch_size = delta_param.first.size() + delta_plus_param.first.size();
+    u64 batch_num = bins_num;
+
+    dim_thread_timer.start();
+    auto pis_sender =
+        Batch_PIS_send_new(a0, batch_size, batch_num, sockets[dim_index]);
+    sync_wait(pis_sender);
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_sh_step4_pis", dim_index));
+
+    insert_commus(fmt::format("recv_{}_pis_step4", dim_index), dim_index);
+
+    if (dim_index == 0)
+      spdlog::debug(
+          "\t[recv] mp_ssFMat_sh thread [{}] —— step4 PIS sender finished!",
+          dim_index);
+
+    /*---------------------------------------------------------------------------*/
+    // step 5: copute v_
+    /*---------------------------------------------------------------------------*/
+    if (METRIC == 1) {
+      // metric == 1
+      for (u64 i = 0; i < bins_num; i++) {
+        v_(i, dim_index) = a_random[i * a_random_stride + dim_index * 2 + 1];
+      }
+    } else {
+      // metric > 1
+      vector<u32> v_si(bins_num * (METRIC - 1));
+      cp::sync_wait(sockets[dim_index].recvResize(v_si));
+
+      u64 tmp_offset = dim_index * (METRIC - 1);
+
+      for (u64 i = 0; i < bins_num; i++) {
+        for (u64 s = 1; s < METRIC; s++) {
+          v_(i, dim_index) +=
+              v_si[i * (METRIC - 1) + (s - 1)] *
+                  a_vole[i * vole_stride + tmp_offset + (s - 1)] -
+              c_vole[i * vole_stride + tmp_offset + (s - 1)];
+        }
+
+        v_(i, dim_index) += a_random[i * a_random_stride + dim_index * 2 + 1];
+      }
+    }
+
+    fpsi_timer.merge(dim_thread_timer);
+  };
+
+  vector<thread> dim_threads;
+  fmat_timer.start();
+  // start dim threads
+  for (u64 t = 0; t < DIM; t++) {
+    dim_threads.emplace_back(dim_thread, t);
+  }
+
+  // wait for getList threads
+  for (auto &th : dim_threads) {
+    th.join();
+  }
+  fmat_timer.end("recv_fmat_sh_threads_all_lp");
+
+  /*---------------------------------------------------------------------------*/
+  // step 5: copute v_ and F_ssIFMatch
+  /*---------------------------------------------------------------------------*/
+  vector<u64> v_sums(bins_num, 0);
+  for (u64 i = 0; i < bins_num; i++) {
+    for (u64 j = 0; j < DIM; j++) {
+      v_sums[i] += v_(i, j);
+    }
+    // v_sums[i] += fast_pow(DELTA, METRIC) / 2;
+  }
+
+  fmat_timer.start();
+  ssIFMat_recv(v_sums);
+  fmat_timer.end("recv_fmat_sh_step5_ssifmat_lp");
+
+  insert_commus("recv_fmat_sh_step5_ssifmat_lp", 0);
 
   fpsi_timer.merge(fmat_timer);
 }

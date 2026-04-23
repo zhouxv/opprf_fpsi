@@ -74,3 +74,13 @@ struct Monty25519Hash {
         string_view(reinterpret_cast<const char *>(bytes.data()), 32));
   }
 };
+
+inline block get_blk_from_cell(const vector<u64> &cell) {
+  blake3_hasher hasher;
+  block hash_out;
+  blake3_hasher_init(&hasher);
+  blake3_hasher_update(&hasher, cell.data(), cell.size() * sizeof(u64));
+  blake3_hasher_finalize(&hasher, hash_out.data(), 16);
+
+  return hash_out;
+}

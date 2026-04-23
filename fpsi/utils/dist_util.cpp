@@ -237,13 +237,13 @@ vector<pt> intersection(const pt &p, u64 metric, u64 dim, u64 delta,
   for (u64 i = 0; i < blk_cells; ++i) {
     pt temp(dim, 0);
     // determine the r_lp based on the metric
-    u64 r_lp = (metric == 2) ? delta_l2 : delta;
+    // u64 r_lp = (metric == 2) ? delta_l2 : delta;
 
     // if the distance is greater than the radius and the current block is the
     // position of the cross point, skip it
-    if (dist > r_lp && i == pos_ind) {
-      continue;
-    }
+    // if (dist > r_lp && i == pos_ind) {
+    //   continue;
+    // }
 
     // compute the coordinates of the current block
     for (u64 j = 0; j < dim; ++j) {

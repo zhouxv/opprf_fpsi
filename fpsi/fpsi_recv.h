@@ -1,6 +1,7 @@
 #pragma once
 #include "config.h"
 #include "fpsi_base.h"
+#include "opprf/Defines.h"
 #include "opprf/SimpleIndex.h"
 #include "utils/params_selects.h"
 
@@ -31,22 +32,8 @@ public:
   u64 BLK_CELLS; // 2^DIM
   u64 DELTA_L2;  // delta*delta
   PRNG recv_prng;
-
-  // figure 8 dFmap protocol
-  vector<block> dfmap_opprf_keys;
-  vector<block> dfmap_opprf_values;
-  vector<block> r_x_i;
-  vector<block> fig8_ID_xr;
-
-  // figure 9 dFmap protocol
   const ipcl::KeyPair &fmap_recv_key;
   const ipcl::KeyPair &fmap_sender_key;
-  vector<u64> IDs;
-  vector<u32> fm_mask;
-  ipcl::CipherText IDs_ct;
-  ipcl::PlainText mask_mul0_pt;
-  vector<vector<block>> get_id_encoding;
-  vector<u64> fig9_ID_xr;
 
   // F_mat results
   BitVector ee;
@@ -71,38 +58,46 @@ public:
     // recv_prng.SetSeed(block(123, 456));
   };
 
-  // Figure 8 dFmap
-  void DFmap_fig8_offline();
-  void DFmap_fig8_online();
+  // figure 9 dFmap protocol
+  vector<u64> IDs;
+  vector<u32> fm_mask;
+  ipcl::CipherText IDs_ct;
+  ipcl::PlainText mask_mul0_pt;
+  vector<vector<block>> get_id_encoding;
+  vector<u64> fig9_ID_xr;
 
-  // Figure 9 dFmap
   void getID();
   void DFmap_fig9_offline();
   void DFmap_fig9_offline_fake();
   void DFmap_fig9_online();
 
   // Figure 9 PSI
-  void psi_offline();
-  void psi_offline_fake();
-  void psi_online();
   void mp_ssFMat_linf(SimpleIndex &st);
   void mp_ssFMat_lp(SimpleIndex &st);
   void ssIFMat_recv(const oc::span<u64> &v_sums);
+  void psi_offline();
+  void psi_offline_fake();
+  void psi_online();
 
-  void DFmap_fig9_clear() {
-    IDs.clear();
-    IDs.shrink_to_fit();
-    fm_mask.clear();
-    fm_mask.shrink_to_fit();
-    get_id_encoding.clear();
-    get_id_encoding.shrink_to_fit();
-    IDs_ct.clear();
-    mask_mul0_pt.clear();
-  }
+  // Figure 8 dFmap
+  vector<block> dfmap_opprf_keys;
+  vector<block> dfmap_opprf_values;
+  vector<block> r_x_i;
+  vector<block> fig8_ID_xr;
+
+  void DFmap_fig8_offline();
+  void DFmap_fig8_online();
 
   // Figure 8 PSI
-  void psi_offline_fig8();
-  void psi_online_fig8();
   void mp_ssFMat_linf_fig8(SimpleIndex &st);
   void mp_ssFMat_lp_fig8(SimpleIndex &st);
+  void psi_offline_fig8();
+  void psi_online_fig8();
+
+  // spatial hash PSI
+  vector<block> sh_ID_xr;
+  void mp_ssFMat_linf_sh(SimpleIndex &st);
+  void mp_ssFMat_lp_sh(SimpleIndex &st);
+  void psi_offline_sh();
+  void psi_online_sh();
 };
