@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
       run_fpsi_protocol(cmd);
       break;
     case 3:
-      run_fpsi_protocol_sh(cmd);
+      run_fpsi_protocol_extra(cmd);
       break;
     default:
       spdlog::error("Unknown protocol type", protocol_type);

@@ -1,4 +1,5 @@
 #include "fpsi_recv.h"
+
 #include "config.h"
 #include "opprf/Defines.h"
 #include "opprf/Opprf.h"
@@ -6,6 +7,7 @@
 #include "pis_new/batch_peqt.h"
 #include "pis_new/batch_pis_new.h"
 #include "rb_okvs/rb_okvs.h"
+
 #include "utils/commu_util.h"
 #include "utils/data_conversion_util.h"
 #include "utils/dist_util.h"
@@ -2282,4 +2284,156 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
   insert_commus("recv_fmat_sh_step5_ssifmat_lp", 0);
 
   fpsi_timer.merge(fmat_timer);
+}
+
+/*
+cmp fmap
+*/
+void FPSIRecv::cmp_fmap() {
+  fig9_ID_xr.resize(PTS_NUM);
+  recv_prng.get(fig9_ID_xr.data(), PTS_NUM);
+}
+
+void FPSIRecv::psi_offline_cmp() {
+  simpleTimer psi_offline_timer;
+
+  // slient VOLE recv
+  if (METRIC > 1) {
+    CuckooIndex<ThreadSafe> ct;
+    ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+    u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
+
+    a_vole.resize(numVole);
+    c_vole.resize(numVole);
+
+    SilentVoleReceiver<u32, u32> receiver;
+    receiver.configure(numVole, SilentSecType::SemiHonest, DefaultMultType,
+                       SilentBaseType::BaseExtend,
+                       SdNoiseDistribution::Regular);
+
+    psi_offline_timer.start();
+    auto proto = receiver.silentReceive(a_vole, c_vole, recv_prng, sockets[0]);
+    cp::sync_wait(proto);
+    psi_offline_timer.end("recv_offline_vole_recv");
+    spdlog::info("\t[Recv] VOLE recv finished!");
+
+    sockets[0].mImpl->mBytesReceived = 0;
+    sockets[0].mImpl->mBytesSent = 0;
+  }
+
+  fpsi_timer.merge(psi_offline_timer);
+  spdlog::info("  Recv psi_offline finished");
+}
+
+void FPSIRecv::psi_online_cmp() {
+  simpleTimer psi_online_timer;
+
+  /* ---------------------------------------------------------------------------*/
+  // step 1: (1,1)-DFmap recv
+  /* ---------------------------------------------------------------------------*/
+  psi_online_timer.start();
+  cmp_fmap();
+  psi_online_timer.end("recv_Fmap_cmp_online");
+  spdlog::info("  Recv step1: fmap finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 2: recv simple hash
+  /* ---------------------------------------------------------------------------*/
+  vector<block> ids_blks(PTS_NUM);
+  blake3_hasher hasher;
+  blake3_hasher_init(&hasher);
+  for (u64 i = 0; i < PTS_NUM; i++) {
+    blake3_hasher_update(&hasher, &fig9_ID_xr[i], sizeof(fig9_ID_xr[i]));
+    blake3_hasher_finalize(&hasher, ids_blks[i].data(), 16);
+    blake3_hasher_reset(&hasher);
+  }
+
+  psi_online_timer.start();
+  CuckooIndex<ThreadSafe> cuckoo_table;
+  cuckoo_table.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+  SimpleIndex simple_table;
+  simple_table.init(cuckoo_table.mNumBins, PTS_NUM);
+
+  simple_table.insert(ids_blks);
+  psi_online_timer.end("recv_simple_hash");
+
+  spdlog::debug(
+      "\t[recv] simple num_balls: {} , num_bins : {}, bin_max_size : {}",
+      PTS_NUM, simple_table.mNumBins, simple_table.mMaxBinSize);
+
+  spdlog::info("  Recv step2: simple hash finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 3: recv mp_ssFMat
+  /* ---------------------------------------------------------------------------*/
+  psi_online_timer.start();
+  if (METRIC == 0) {
+    mp_ssFMat_linf(simple_table);
+  } else {
+    mp_ssFMat_lp(simple_table);
+  }
+  psi_online_timer.end("recv_ssFmat");
+
+  spdlog::info("  Recv step3: mp_ssFMath_L{} finished!",
+               (METRIC == 0) ? "inf" : std::to_string(METRIC));
+
+  /* ---------------------------------------------------------------------------*/
+  // step 4: recv PSI OT
+  /* ---------------------------------------------------------------------------*/
+  SilentOtExtReceiver s_ot_recv;
+  u64 numOTs = cuckoo_table.mNumBins;
+  s_ot_recv.configure(numOTs, 2, 1, SilentSecType::SemiHonest,
+                      SdNoiseDistribution::Regular, DefaultMultType);
+
+  //  gen baseOT
+  coproto::sync_wait(s_ot_recv.genBaseCors(recv_prng, sockets[0]));
+
+  std::vector<block> ot_messages(numOTs);
+
+  psi_online_timer.start();
+  // gen randomOT
+  auto proto = s_ot_recv.receive(ee, ot_messages, recv_prng, sockets[0]);
+  // auto protocol = s_ot_recv.silentReceive(ee, ot_messages, recv_prng,
+  //                                         sockets[0], OTType::Correlated);
+  cp::sync_wait(proto);
+
+  // randomOT -> OT
+  vector<block> mask_msg_0(numOTs);
+  vector<block> mask_msg_1(numOTs);
+  coproto::sync_wait(sockets[0].recv(mask_msg_0));
+  coproto::sync_wait(sockets[0].recv(mask_msg_1));
+
+  vector<u64> recvMsgs(numOTs);
+  for (u64 i = 0; i < numOTs; i++) {
+    auto tmp_blk = (ee[i]) ? (ot_messages[i] ^ mask_msg_1[i])
+                           : (ot_messages[i] ^ mask_msg_0[i]);
+    recvMsgs[i] = tmp_blk.get<u64>()[0];
+  }
+  psi_online_timer.end("recv_psi_ot");
+  insert_commus("recv_psi_ot", 0);
+
+  spdlog::info("  Recv step4: recv OTs finished!");
+
+  psi_online_timer.start();
+  std::vector<std::pair<u64, u64>> find_table;
+  for (u64 i = 0; i < PTS_NUM; i++) {
+    find_table.emplace_back(fig9_ID_xr[i], i);
+  }
+  std::sort(find_table.begin(), find_table.end());
+
+  // lookup
+  vector<u64> intersection_idxs;
+  for (auto msg : recvMsgs) {
+    auto it = std::lower_bound(find_table.begin(), find_table.end(), msg,
+                               [](auto &p, u64 k) { return p.first < k; });
+
+    if (it != find_table.end() && it->first == msg) {
+      intersection_idxs.push_back(it->second);
+    }
+  }
+
+  intersection_idxs_tmp = intersection_idxs;
+  psi_online_timer.end("recv_psi_intersection");
+
+  fpsi_timer.merge(psi_online_timer);
 }

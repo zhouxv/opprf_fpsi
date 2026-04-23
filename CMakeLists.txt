@@ -28,19 +28,13 @@ target_compile_options(main PRIVATE
 # Link  fmt                                  #
 # ############################################
 find_package(fmt REQUIRED)
-target_link_libraries(main fmt::fmt)
+target_link_libraries(main PUBLIC fmt::fmt)
 
 # # ############################################
 # # Link  libOTe                               #
 # # ############################################
 find_package(libOTe REQUIRED)
-target_link_libraries(main oc::libOTe)
-
-# # ############################################
-# # Link  Myblake3                             #
-# # ############################################
-# # target_link_libraries: Used to specify the library files to be linked. However, directly using relative paths may cause issues.
-target_link_libraries(main ${CMAKE_SOURCE_DIR}/out/install/lib/libblake3.a)
+target_link_libraries(main PUBLIC oc::libOTe)
 
 # # ############################################
 # # Link  IPCL                                 #
@@ -48,12 +42,23 @@ target_link_libraries(main ${CMAKE_SOURCE_DIR}/out/install/lib/libblake3.a)
 find_package(IPCL 2.0.0
     HINTS
     REQUIRED)
-target_link_libraries(main IPCL::ipcl)
+target_link_libraries(main PUBLIC IPCL::ipcl)
 
+# # ############################################
+# # Link  Myblake3                             #
+# # ############################################
+add_library(blake3 STATIC IMPORTED)
+set_target_properties(blake3 PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/out/install/lib/libblake3.a"
+)
+target_link_libraries(main PUBLIC blake3)
 
 # # ############################################
 # # Link  GMP                                  #
 # # ############################################
-target_link_libraries(main /lib/x86_64-linux-gnu/libgmpxx.a /lib/x86_64-linux-gnu/libgmp.a)
-
+add_library(gmp STATIC IMPORTED)
+set_target_properties(gmp PROPERTIES
+    IMPORTED_LOCATION "/lib/x86_64-linux-gnu/libgmp.a"
+)
+target_link_libraries(main PUBLIC gmp)
 

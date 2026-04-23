@@ -434,9 +434,7 @@ run_fpsi_protocol(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   return {online_time, total_com};
 }
 
-void run_fpsi_protocol_sh(const CLP &cmd) {
-  string pro_type = "spatial_hash";
-
+void run_fpsi_protocol_extra(const CLP &cmd) {
   // obtain protocol parameters
   const u64 num = cmd.getOr<u64>("n", 8);
   const u64 dim = cmd.getOr<u64>("d", 2);
@@ -446,10 +444,13 @@ void run_fpsi_protocol_sh(const CLP &cmd) {
   const u64 trait = cmd.getOr("trait", 1);
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
+  const u64 pro_type = cmd.getOr<u64>("fm", 1);
 
   const bool pts_same = cmd.isSet("same");
   const bool detailed = cmd.isSet("detail");
   const bool fake = cmd.isSet("fake");
+
+  string pro_type_str = (pro_type == 1) ? "spatial_hash" : "cmp";
 
   // check intersection size
   auto set_size = 1 << num;
@@ -467,7 +468,7 @@ void run_fpsi_protocol_sh(const CLP &cmd) {
   spdlog::info("intersection_size : {}", intersection_size);
   spdlog::info("trait             : {}", trait);
 
-  spdlog::info("fmap_type         : {}", pro_type);
+  spdlog::info("fmap_type         : {}", pro_type_str);
   spdlog::info("pts_same          : {}", pts_same);
   spdlog::info("detailed          : {}", detailed);
   spdlog::info("fake              : {}", fake);
@@ -477,8 +478,8 @@ void run_fpsi_protocol_sh(const CLP &cmd) {
   vector<double> comm_sums(trait, 0.0);
   for (u64 i = 0; i < trait; i++) {
     std::pair<double, double> tmp =
-        run_fpsi_protocol_sh(set_size, dim, metric, delta, intersection_size,
-                             ip, port, pts_same, detailed, fake);
+        run_fpsi_protocol_extra(set_size, dim, metric, delta, intersection_size,
+                                ip, port, pro_type, pts_same, detailed, fake);
     time_sums[i] = tmp.first;
     comm_sums[i] = tmp.second;
   }
@@ -493,7 +494,7 @@ void run_fpsi_protocol_sh(const CLP &cmd) {
 
   cout << std::format("[{}]  {:^5}  𝐿{}  {:^5}  {:^5}  "
                       "{:^10.3f}  {:^10.3f}",
-                      pro_type, set_size, mertric_str, dim, delta, avg_com,
+                      pro_type_str, set_size, mertric_str, dim, delta, avg_com,
                       avg_online_time)
        << endl;
 
@@ -501,10 +502,11 @@ void run_fpsi_protocol_sh(const CLP &cmd) {
 }
 
 std::pair<double, double>
-run_fpsi_protocol_sh(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
-                     const u64 DELTA, const u64 INTERSECTION_SIZE,
-                     const string IP, const u64 PORT, const bool PTS_SAME,
-                     const bool DETAILED, const bool FAKE) {
+run_fpsi_protocol_extra(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
+                        const u64 DELTA, const u64 INTERSECTION_SIZE,
+                        const string IP, const u64 PORT, const u64 FM_TYPE,
+                        const bool PTS_SAME, const bool DETAILED,
+                        const bool FAKE) {
   simpleTimer timer;
 
   // Paillier keys initialization
@@ -550,12 +552,21 @@ run_fpsi_protocol_sh(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   // PSI Offline phase
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   auto fpsi_offline = [&](FPSISender &s, FPSIRecv &r, bool fake) {
-    // figure 8 PSI offline phase
-    std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_sh, &r));
-    std::thread send_offline(std::bind(&FPSISender::psi_offline_sh, &s));
-    recv_offline.join();
-    send_offline.join();
-    return;
+    // FM_TYPE==1 : spatial hash fmap
+    // else:        cmp fmap
+    if (FM_TYPE == 1) {
+      std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_sh, &r));
+      std::thread send_offline(std::bind(&FPSISender::psi_offline_sh, &s));
+      recv_offline.join();
+      send_offline.join();
+      return;
+    } else {
+      std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_cmp, &r));
+      std::thread send_offline(std::bind(&FPSISender::psi_offline_cmp, &s));
+      recv_offline.join();
+      send_offline.join();
+      return;
+    }
   };
 
   timer.start();
@@ -568,11 +579,19 @@ run_fpsi_protocol_sh(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   timer.start();
 
-  // figure 8 PSI online phase
-  std::thread recv_msg(std::bind(&FPSIRecv::psi_online_sh, &recv));
-  std::thread send_msg(std::bind(&FPSISender::psi_online_sh, &sender));
-  recv_msg.join();
-  send_msg.join();
+  if (FM_TYPE == 1) {
+    // spatial hash PSI online phase
+    std::thread recv_msg(std::bind(&FPSIRecv::psi_online_sh, &recv));
+    std::thread send_msg(std::bind(&FPSISender::psi_online_sh, &sender));
+    recv_msg.join();
+    send_msg.join();
+  } else {
+    // cmp PSI online phase
+    std::thread recv_msg(std::bind(&FPSIRecv::psi_online_cmp, &recv));
+    std::thread send_msg(std::bind(&FPSISender::psi_online_cmp, &sender));
+    recv_msg.join();
+    send_msg.join();
+  }
 
   timer.end("protocol_online");
   spdlog::info("PSI Online phase finished !!");

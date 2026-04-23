@@ -58,11 +58,28 @@ install_pailliercryptolib(){
     cd ..
 }
 
+install_securejoin() {
+    rm -rf secure-join
+
+    printf "################## Cloning secure-join repository ###################\n\n"
+    git clone https://github.com/ladnir/secure-join.git
+    cd secure-join
+    git checkout 377ca63b9d8f4f6aede0d3a2e3d9078973a3ee10
+
+    printf "################## Building secure-join             ###################\n\n"
+    python3 build.py -DFETCH_SODIUM=ON -DOC_THIRDPARTY_HINT="$(pwd)/out/install/linux"
+
+    python3 build.py --install=../../out/secure-join
+
+    cd ..
+}
+
 
 mkdir -p thirdparty && cd thirdparty
 
 install_libOTe
 install_blake3
 install_pailliercryptolib
+install_securejoin
 
 # rm -rf thirdparty

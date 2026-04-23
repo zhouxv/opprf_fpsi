@@ -93,4 +93,9 @@ public:
   template <CuckooTypes Mode> void mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct);
   void psi_offline_sh();
   void psi_online_sh();
+
+  // cmp fmap psi
+  void psi_offline_cmp();
+  void psi_online_cmp();
+  void cmp_fmap();
 };

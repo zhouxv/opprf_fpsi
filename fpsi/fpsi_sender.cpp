@@ -1585,7 +1585,9 @@ void FPSISender::mp_ssFMat_lp_fig8(CuckooIndex<Mode> &ct) {
   fpsi_timer.merge(fmat_timer);
 }
 
-// spatial hash PSI
+/*
+spatial hash PSI
+*/
 void FPSISender::psi_offline_sh() {
   simpleTimer psi_offline_timer;
 
@@ -2080,4 +2082,162 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
   insert_commus("sender_fmat_sh_step5_ssifmat_lp", 0);
 
   fpsi_timer.merge(fmat_timer);
+}
+
+/*
+cmp fmap PSI
+*/
+void FPSISender::cmp_fmap() {
+  fig9_ID_ys.resize(PTS_NUM);
+  sender_prng.get(fig9_ID_ys.data(), PTS_NUM);
+}
+
+void FPSISender::psi_offline_cmp() {
+  simpleTimer psi_offline_timer;
+
+  if (METRIC > 1) {
+    // slient VOLE sender
+    CuckooIndex<ThreadSafe> ct;
+    ct.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+
+    u64 numVole = ct.mNumBins * DIM * (METRIC - 1);
+    b_delta = sender_prng.get<u32>();
+    d_vole.resize(numVole);
+
+    SilentVoleSender<u32, u32> sender;
+    sender.configure(numVole, SilentSecType::SemiHonest, DefaultMultType,
+                     SilentBaseType::BaseExtend, SdNoiseDistribution::Regular);
+
+    psi_offline_timer.start();
+    auto proto = sender.silentSend(b_delta, d_vole, sender_prng, sockets[0]);
+    cp::sync_wait(proto);
+    psi_offline_timer.end("sender_offline_vole_sender");
+
+    spdlog::info("\t[send] silent VOLE sender finished!");
+
+    sockets[0].mImpl->mBytesReceived = 0;
+    sockets[0].mImpl->mBytesSent = 0;
+  }
+
+  fpsi_timer.merge(psi_offline_timer);
+  spdlog::info("  Sender psi_offline finished");
+}
+
+void FPSISender::psi_online_cmp() {
+  simpleTimer psi_online_timer;
+
+  /* ---------------------------------------------------------------------------*/
+  // step 1: cmp-Fmap send
+  /* ---------------------------------------------------------------------------*/
+  psi_online_timer.start();
+  cmp_fmap();
+  psi_online_timer.end("sender_DFmap_fig9_online");
+
+  spdlog::info("  Sender step1: fmap finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 2: sender cuckoo hash
+  /* ---------------------------------------------------------------------------*/
+  vector<block> ids_blks(PTS_NUM);
+  blake3_hasher hasher;
+  blake3_hasher_init(&hasher);
+  for (u64 i = 0; i < PTS_NUM; i++) {
+    blake3_hasher_update(&hasher, &fig9_ID_ys[i], sizeof(fig9_ID_ys[i]));
+    blake3_hasher_finalize(&hasher, ids_blks[i].data(), 16);
+    blake3_hasher_reset(&hasher);
+  }
+
+  psi_online_timer.start();
+  CuckooIndex<ThreadSafe> cuckoo_table;
+  cuckoo_table.init(PTS_NUM, CUCKOO_SEC_PARAM, STASH_SIZE, NUM_HASH_FUNC);
+  cuckoo_table.insert(ids_blks);
+  psi_online_timer.end("sender_cuckoo_hash");
+
+  // for (u64 i = 0; i < 5; i++) {
+  //   auto tmp = cuckoo_table.find(ids_blks[i]);
+  //   spdlog::debug("\t[recv] cuckoo index: {}, value: {}, hashindex:{}", i,
+  //                 cuckoo_table.mVals[tmp.mInputIdx], tmp.mCuckooPositon);
+
+  //   spdlog::debug("\t[recv] cuckoo index: {}, value: {}, hashindex:{} {} {}",
+  //   i,
+  //                 ids_blks[i], cuckoo_table.mLocations(i, 0),
+  //                 cuckoo_table.mLocations(i, 1), cuckoo_table.mLocations(i,
+  //                 2));
+  // }
+
+  spdlog::debug("\t[send] cuckoo num_balls: {} , num_bins : {}",
+                cuckoo_table.mParams.mN, cuckoo_table.mNumBins);
+
+  spdlog::info("  Sender step2: cuckoo hash finished!");
+
+  /* ---------------------------------------------------------------------------*/
+  // step 3: sender mp_ssFMat
+  /* ---------------------------------------------------------------------------*/
+  psi_online_timer.start();
+
+  if (METRIC == 0) {
+    mp_ssFMat_linf(cuckoo_table);
+  } else {
+    mp_ssFMat_lp(cuckoo_table);
+  }
+  psi_online_timer.end("sender_ssFmat");
+
+  spdlog::info("  Sender step3: mp_ssFMat_L{} finished!",
+               (METRIC == 0) ? "inf" : std::to_string(METRIC));
+
+  /* ---------------------------------------------------------------------------*/
+  // step 4: sender PSI OT
+  /* ---------------------------------------------------------------------------*/
+  SilentOtExtSender s_ot_sender;
+  u64 numOTs = cuckoo_table.mNumBins;
+  s_ot_sender.configure(numOTs, 2, 1, SilentSecType::SemiHonest,
+                        SdNoiseDistribution::Regular, DefaultMultType);
+
+  psi_online_timer.start();
+
+  //  gen baseOT
+  cp::sync_wait(s_ot_sender.genBaseCors({}, sender_prng, sockets[0]));
+
+  // gen randomOT
+  std::vector<std::array<block, 2>> ot_messages(numOTs);
+  auto proto = s_ot_sender.send(ot_messages, sender_prng, sockets[0]);
+  // auto protocol = s_ot_sender.silentSend(ot_messages, sender_prng,
+  // sockets[0]);
+  cp::sync_wait(proto);
+
+  // randomOT -> OT
+  vector<block> half_sendMsg_0(numOTs);
+  vector<block> half_sendMsg_1(numOTs);
+
+  for (u64 i = 0; i < numOTs; i++) {
+    auto tmp_bin = cuckoo_table.mBins[i];
+    bool empty = tmp_bin.isEmpty();
+    bool hit = ee[i];
+
+    auto m0 = ot_messages[i][0];
+    auto m1 = ot_messages[i][1];
+
+    if (empty) {
+      half_sendMsg_0[i] = sender_prng.get<block>() ^ m0;
+      half_sendMsg_1[i] = sender_prng.get<block>() ^ m1;
+    } else {
+      auto pt_blk = block(fig9_ID_ys[tmp_bin.idx()]);
+      if (hit) {
+        half_sendMsg_0[i] = pt_blk ^ m0;
+        half_sendMsg_1[i] = sender_prng.get<block>() ^ m1;
+      } else {
+        half_sendMsg_0[i] = sender_prng.get<block>() ^ m0;
+        half_sendMsg_1[i] = pt_blk ^ m1;
+      }
+    }
+  }
+
+  coproto::sync_wait(sockets[0].send(half_sendMsg_0));
+  coproto::sync_wait(sockets[0].send(half_sendMsg_1));
+  psi_online_timer.end("sender_psi_ot");
+  insert_commus("sender_psi_ot", 0);
+
+  spdlog::info("  Sender step4: sender OTs finished!");
+
+  fpsi_timer.merge(psi_online_timer);
 }
