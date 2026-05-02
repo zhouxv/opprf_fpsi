@@ -4,12 +4,23 @@ project(ourFPSI)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
-set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/out/install")
+
+set(SecJoin_INSTALL_PATH "${CMAKE_SOURCE_DIR}/out/secure-join")
+set(DEFAULT_INSTALL_PATH "${CMAKE_SOURCE_DIR}/out/install")
+
+list(APPEND CMAKE_PREFIX_PATH
+    "${SecJoin_INSTALL_PATH}"
+    "${DEFAULT_INSTALL_PATH}"
+)
+
 
 # include_directories：Used to specify the search path for header files, rather than the path for library files
 include_directories(fpsi)
 include_directories(frontend)
 include_directories(${CMAKE_SOURCE_DIR}/out/install/include)
+include_directories(${SecJoin_INSTALL_PATH}/include)
+include_directories(${SecJoin_INSTALL_PATH}/include/secureJoin)
+
 
 file(GLOB_RECURSE SRCS
     frontend/*.cpp
@@ -29,12 +40,6 @@ target_compile_options(main PRIVATE
 # ############################################
 find_package(fmt REQUIRED)
 target_link_libraries(main PUBLIC fmt::fmt)
-
-# # ############################################
-# # Link  libOTe                               #
-# # ############################################
-find_package(libOTe REQUIRED)
-target_link_libraries(main PUBLIC oc::libOTe)
 
 # # ############################################
 # # Link  IPCL                                 #
@@ -62,3 +67,23 @@ set_target_properties(gmp PROPERTIES
 )
 target_link_libraries(main PUBLIC gmp)
 
+
+# # ############################################
+# # Link  securejoin                            #
+# # ############################################
+target_link_libraries(main PRIVATE
+    ${SecJoin_INSTALL_PATH}/lib/libsecureJoin.a
+    ${SecJoin_INSTALL_PATH}/lib/libSecureJoinOTe.a
+)
+
+
+# # ############################################
+# # Link  libOTe                               #
+# # ############################################
+find_package(libOTe REQUIRED)
+target_link_libraries(main PUBLIC oc::libOTe)
+
+
+target_link_libraries(main PRIVATE
+    ${DEFAULT_INSTALL_PATH}/lib/libcoproto.a
+)

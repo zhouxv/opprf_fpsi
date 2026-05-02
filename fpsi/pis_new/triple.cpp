@@ -15,7 +15,7 @@ coproto::task<> triple0(coproto::Socket &chl, BitVector &a0, BitVector &b0,
 
   IknpOtExtSender sender;
   IknpOtExtReceiver receiver;
-  SilentOtExtSender silentSender;
+  oc::SilentOtExtSender silentSender;
   SilentOtExtReceiver silentReceiver;
 
   // virtual channels, share chl
@@ -66,10 +66,10 @@ coproto::task<> triple1(coproto::Socket &chl, BitVector &a1, BitVector &b1,
   u64 n = a1.size();
   b1.randomize(prng);
 
-  IknpOtExtSender sender;
-  IknpOtExtReceiver receiver;
-  SilentOtExtSender silentSender;
-  SilentOtExtReceiver silentReceiver;
+  oc::IknpOtExtSender sender;
+  oc::IknpOtExtReceiver receiver;
+  oc::SilentOtExtSender silentSender;
+  oc::SilentOtExtReceiver silentReceiver;
 
   auto recvChl = chl.fork();
   auto sendChl = chl.fork();

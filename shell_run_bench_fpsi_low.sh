@@ -14,7 +14,7 @@ cleanup() {
 trap 'cleanup' INT TERM EXIT
 
 
-ns=(8)
+ns=(8 12 16)
 dims=(2)
 deltas=(10 60 250)
 metrics=(0 1 2)
@@ -25,7 +25,7 @@ for m in "${metrics[@]}"; do
   for n in "${ns[@]}"; do
     for dim in "${dims[@]}"; do
       for delta in "${deltas[@]}"; do
-        ./build/main -p 3 -trait 3 -log 0 -i 11 -d $dim -delta $delta -n $n -m $m
+        ./build/main -p 2 -trait 3 -log 0 -i 11 -d $dim -delta $delta -n $n -m $m -fm 1
       done
       echo
     done

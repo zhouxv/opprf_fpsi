@@ -1,4 +1,5 @@
 #pragma once
+#include "cmp_fmap/fmap.h"
 #include "config.h"
 #include "fpsi_base.h"
 #include "opprf/Defines.h"
@@ -58,42 +59,6 @@ public:
     // recv_prng.SetSeed(block(123, 456));
   };
 
-  // figure 9 dFmap protocol
-  vector<u64> IDs;
-  vector<u32> fm_mask;
-  ipcl::CipherText IDs_ct;
-  ipcl::PlainText mask_mul0_pt;
-  vector<vector<block>> get_id_encoding;
-  vector<u64> fig9_ID_xr;
-
-  void getID();
-  void DFmap_fig9_offline();
-  void DFmap_fig9_offline_fake();
-  void DFmap_fig9_online();
-
-  // Figure 9 PSI
-  void mp_ssFMat_linf(SimpleIndex &st);
-  void mp_ssFMat_lp(SimpleIndex &st);
-  void ssIFMat_recv(const oc::span<u64> &v_sums);
-  void psi_offline();
-  void psi_offline_fake();
-  void psi_online();
-
-  // Figure 8 dFmap
-  vector<block> dfmap_opprf_keys;
-  vector<block> dfmap_opprf_values;
-  vector<block> r_x_i;
-  vector<block> fig8_ID_xr;
-
-  void DFmap_fig8_offline();
-  void DFmap_fig8_online();
-
-  // Figure 8 PSI
-  void mp_ssFMat_linf_fig8(SimpleIndex &st);
-  void mp_ssFMat_lp_fig8(SimpleIndex &st);
-  void psi_offline_fig8();
-  void psi_online_fig8();
-
   // spatial hash PSI
   vector<block> sh_ID_xr;
   void mp_ssFMat_linf_sh(SimpleIndex &st);
@@ -102,7 +67,48 @@ public:
   void psi_online_sh();
 
   // cmp fmap psi
+  vector<block> cmp_ID;
+  vector<block> recv_data;
+  CmpFuzzyPSI::FmapReceiver cmp_fmap_receiver;
+  void cmp_fmap_offline();
+  void cmp_fmap_online();
   void cmp_fmap();
   void psi_offline_cmp();
   void psi_online_cmp();
+  void mp_ssFMat_linf(SimpleIndex &st);
+  void mp_ssFMat_lp(SimpleIndex &st);
+  void ssIFMat_recv(const oc::span<u64> &v_sums);
+
+  // figure 9 dFmap protocol
+  // vector<u64> fig9_ID_xr;
+  // vector<u64> IDs;
+  // vector<u32> fm_mask;
+  // ipcl::CipherText IDs_ct;
+  // ipcl::PlainText mask_mul0_pt;
+  // vector<vector<block>> get_id_encoding;
+
+  // void getID();
+  // void DFmap_fig9_offline();
+  // void DFmap_fig9_offline_fake();
+  // void DFmap_fig9_online();
+
+  // Figure 9 PSI
+  // void psi_offline();
+  // void psi_offline_fake();
+  // void psi_online();
+
+  // Figure 8 dFmap
+  // vector<block> dfmap_opprf_keys;
+  // vector<block> dfmap_opprf_values;
+  // vector<block> r_x_i;
+  // vector<block> fig8_ID_xr;
+
+  // void DFmap_fig8_offline();
+  // void DFmap_fig8_online();
+
+  // Figure 8 PSI
+  // void mp_ssFMat_linf_fig8(SimpleIndex &st);
+  // void mp_ssFMat_lp_fig8(SimpleIndex &st);
+  // void psi_offline_fig8();
+  // void psi_online_fig8();
 };

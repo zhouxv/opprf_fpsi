@@ -13,8 +13,20 @@ cleanup() {
 # Register Signal Capture
 trap 'cleanup' INT TERM EXIT
 
-printf "[ProType] [Size] [Metric] [Dim] [Delta] [Com.(MB)] [Time(s)]\n"
 
-./build/main -p 1 -n 8 12 16 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 1 -log 0 -fm 0 -fake
+ns=(8 12 16)
+dims=(2 6 10 15)
+deltas=(10 60 250)
 
-./build/main -p 1 -n 8 12 16 -d 2 6 10 15 -m 0 -delta 10 60 250 -trait 1 -log 0 -fm 1 -fake
+
+printf "[ProType] [Size] [Dim] [Delta] [Com.(MB)] [Time(s)]\n"
+  
+for n in "${ns[@]}"; do
+    for dim in "${dims[@]}"; do
+      for delta in "${deltas[@]}"; do
+        ./build/main -p 1 -trait 5 -log 0 -i 11 -d $dim -delta $delta -n $n -m $m 
+      done
+      echo
+    done
+done
+

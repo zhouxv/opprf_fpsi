@@ -9,23 +9,27 @@ We propose a fuzzy PSI protocol for $L_{p \in [1,+\infty]}$ distance based on sy
 The following is the structure description of this project. We have provided some scripts to assist with building and running tests. Please grant execute permissions to these scripts, all of which are designed to be run from the project root directory.
 
 ```bash
-├── fpsi/                 # Core FPSI protocol implementation
-│   ├── fpsi_protocol.*   # Main protocol logic
-│   ├── fpsi_sender.*     # Sender implementation
-│   ├── fpsi_recv.*       # Receiver implementation
-│   ├── opprf/            # OPPRF primitives
-│   ├── pis_new/          # Private information system
-│   ├── rb_okvs/          # Ribbon OKVS implementation
-│   └── utils/            # Utility functions
-├── frontend/             # Frontend and testing
-│   ├── main.cpp          # Main entry point
-│   └── test.*            # Test files
+├── fpsi/                               # Core FPSI protocol implementation
+│   ├── config.h                        # Configuration header
+│   ├── fpsi_base.h                     # Base definitions
+│   ├── fpsi_protocol.*                 # Main protocol logic
+│   ├── fpsi_sender.*                   # Sender implementation
+│   ├── fpsi_recv.*                     # Receiver implementation
+│   ├── cmp_fmap/                       # Fuzzy mapping (Fmap) implementation
+│   ├── opprf/                          # OPPRF (Oblivious Programmable PRF) primitives
+│   ├── pis_new/                        # Private Information System (new version)
+│   ├── rb_okvs/                        # Rb OKVS (Oblivious Key-Value Store)
+│   └── utils/                          # Utility functions
+├── frontend/                           # Frontend and testing
+│   ├── main.cpp                        # Main entry point for benchmarks
+│   ├── test.*                          # Test files
 ├── CMakeLists.txt                      # CMake configuration
 ├── Dockerfile                          # Docker image definition
 ├── shell_build_cmd.sh                  # Build script
 ├── shell_install_all_dependencies.sh   # Dependency installation script
-├── shell_run_bench_fmap.sh             # Fmap benchmark script to reproduce Table 3 data in our paper
-└── shell_run_bench_fpsi.sh             # Fpsi benchmark script to reproduce Table 4 data in our paper
+├── shell_run_bench_fmap.sh             # Fmap benchmark script (reproduces Table 3 data in our paper)
+├── shell_run_bench_fpsi_high.sh        # FPSI benchmark for high-dimensional data (reproduces Table 4 data in our paper)
+└── shell_run_bench_fpsi_low.sh         # FPSI benchmark for low-dimensional data (reproduces Table 7 data in our paper)
 ```
 
 ## 2. Prerequisites
@@ -76,10 +80,12 @@ docker run -dit --name fpsi_opprf --cap-add=NET_ADMIN blueobsidian/fpsi_opprf:la
 ### Step 2: Run Benchmark Scripts
 
 ```bash
-# Reproduce Table 3 data (FMAP benchmarks)
+# Reproduces Table 3 data in our paper (FMAP benchmarks)
 ./shell_run_bench_fmap.sh
-# Reproduce Table 4 data (FPSI benchmarks)
-./shell_run_bench_fpsi.sh
+# Reproduces Table 4 data in our paper (FPSI in high dimension case benchmarks)
+./shell_run_bench_fpsi_high.sh
+# Reproduces Table 7 data in our paper (FPSI in low dimension case benchmarks)
+./shell_run_bench_fpsi_low.sh 
 ```
 
 ## 4. Usage Guide for Executable
@@ -90,63 +96,54 @@ This section describes the usage of the executable file located at `./build/main
 
 | Flag | Meaning | Optional Values | Description |
 |:----:|:--------|:----------------|:------------|
-| **p** | Protocol Type | `1`: FMAP protocol (default)<br/>`2`: FPSI protocol | Select which protocol to run |
+| **p** | Protocol Type | `1`: (1-1)-FMAP protocol<br/>(*fig7 in our paper*) (default)<br/>`2`: FPSI protocol | Select which protocol to run |
 | **n** | Set Size (logarithm) | Positive integer(s), default: `8` | Input set size = 2^n |
 | **d** | Dimension | Positive integer(s), default: `2` | Dimension of the points |
 | **m** | Metric | `0`: L∞ (default)<br/>`1`: L₁<br/>`2`: L₂ | Distance metric for fuzzy matching |
 | **delta** | Radius/Threshold | `10`, `30`, `60`, `120`, `250` | Distance threshold δ.  |
 | **i** | Intersection Size | Positive integer, default: `15` | Number of points in the intersection |
-| **trait** | Number of Trials | Positive integer, default: `1` | Number of test runs for averaging results |
+| **fm** | Fmap Type | `0`: cmp_fmap<br/>`1`: spatial_hash_fmap (default)<br/> | Fuzzy mapping variant to use, only for FPSI protocol |
 | **ip** | Server IP | IP address string, default: `"127.0.0.1"` | IP address for network communication |
 | **port** | Server Port | Port number, default: `1212` | Starting port number for connections |
-| **fm** | Fmap Type | `0`: Fig.9 (1,1) DFmap (default)<br/>`1`: Fig.8 (d,d) DFmap | Fuzzy mapping variant to use |
+| **trait** | Number of Trials | Positive integer, default: `1` | Number of test runs for averaging results |
 | **detail** | Detailed Output | Flag (no value) | If set, print detailed timing and communication breakdown |
-| **fake** | Fake Mode | Flag (no value) | If set, use fake/simulated offline phase |
 | **log** | Log Level | `0`: off<br/>`1`: info (default)<br/>`2`: debug | Console logging verbosity |
 
 ### Usage Examples
 
-#### Example 1: Run Fig.9 (1,1) DFmap (FMAP protocol)
+#### Example A: Run FMAP benchmark
 
 ```bash
-./build/main -p 1 -n 8 -d 2 -delta 10 -i 15 -fm 0
+./build/main -p 1 -n 12 -d 6 -delta 60  -trait 5 -log 0
 # Protocol: FMAP
-# Set size: 2^8 = 256 points
-# Dimension: 2
-# Threshold: δ=10
-# Fuzzy mapping: Fig.9 (1,1) DFmap
-```
-
-#### Example 2: Run Fig.8 (d,d) DFmap (FMAP protocol)
-
-```bash
-./build/main -p 1 -n 10 -d 6 -delta 60 -i 20 -fm 1
-# Protocol: FMAP
-# Set size: 2^10 = 1024 points
+# Set size: 2^12 = 4096 points
 # Dimension: 6
 # Threshold: δ=60
-# Fuzzy mapping: Fig.8 (d,d) DFmap
+# Trials: 5
 ```
 
-#### Example 3: Run FPSI protocol with $L_{\infty}$ metric
+#### Example B: FPSI low-dimensional run
 
 ```bash
-./build/main -p 2 -n 8 -d 2 -m 0 -delta 120 -i 15
+./build/main -p 2 -trait 3 -log 0 -i 11 -d 2 -delta 10 -n 8 -m 0 -fm 1
 # Protocol: FPSI
 # Set size: 2^8 = 256 points
-# Dimension: 2
-# Distance metric: L∞ (m=0)
-# Threshold: δ=120
+# Dimension: 2 (low-dim)
+# Metric: L∞ (m=0)
+# Threshold: δ=10
+# Fmap variant: spatial_hash (fm=1)
+# Trials: 3
 ```
 
-#### Example 4: Run FPSI protocol with $L_2$ metric
+#### Example C: FPSI high-dimensional run
 
 ```bash
-./build/main -p 2 -n 12 -d 10 -m 2 -delta 250 -i 20 -detail
+./build/main -p 2 -trait 3 -log 0 -i 11 -d 10 -delta 60 -n 12 -m 1 -fm 0
 # Protocol: FPSI
 # Set size: 2^12 = 4096 points
-# Dimension: 10
-# Distance metric: L₂ (m=2)
-# Threshold: δ=250
-# Print detailed timing and communication breakdown
+# Dimension: 10 (high-dim)
+# Metric: L1 (m=1)
+# Threshold: δ=60
+# Fmap variant: cmp_fmap (fm=0)
+# Trials: 3
 ```

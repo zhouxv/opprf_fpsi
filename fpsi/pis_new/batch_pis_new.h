@@ -90,9 +90,9 @@ cp::task<vector<u64>> Batch_PIS_recv_new(vector<T> &eles, const u64 batch_size,
   PRNG prng(oc::sysRandomSeed());
 
   // SilentOt recv
-  SilentOtExtReceiver recv;
-  recv.configure(numOTs, 2, 1, SilentSecType::SemiHonest,
-                 SdNoiseDistribution::Regular, DefaultMultType);
+  oc::SilentOtExtReceiver recv;
+  recv.configure(numOTs, 2, 1, oc::SilentSecType::SemiHonest,
+                 SdNoiseDistribution::Regular, oc::DefaultMultType);
 
   //  gen baseOT
   co_await recv.genBaseCors(prng, socket);
@@ -215,9 +215,9 @@ cp::task<void> Batch_PIS_send_new(vector<T> &datas, const u64 batch_size,
   u64 numOTs = batch_num;
 
   // SilentOt sender
-  SilentOtExtSender sender;
-  sender.configure(numOTs, 2, 1, SilentSecType::SemiHonest,
-                   SdNoiseDistribution::Regular, DefaultMultType);
+  oc::SilentOtExtSender sender;
+  sender.configure(numOTs, 2, 1, oc::SilentSecType::SemiHonest,
+                   SdNoiseDistribution::Regular, oc::DefaultMultType);
 
   //  gen baseOT
   co_await sender.genBaseCors({}, prng, socket);

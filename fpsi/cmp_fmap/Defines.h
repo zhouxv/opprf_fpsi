@@ -1,0 +1,49 @@
+#pragma once
+
+#include "coproto/coproto.h"
+#include "cryptoTools/Common/BitVector.h"
+#include "cryptoTools/Common/Defines.h"
+#include "cryptoTools/Common/Matrix.h"
+#include "cryptoTools/Crypto/PRNG.h"
+
+namespace CmpFuzzyPSI {
+
+using u64 = oc::u64;
+using u32 = oc::u32;
+using u16 = oc::u16;
+using u8 = oc::u8;
+
+using i64 = oc::i64;
+using i32 = oc::i32;
+using i16 = oc::i16;
+using i8 = oc::i8;
+
+using block = oc::block;
+using BitVector = osuCrypto::BitVector;
+using AES = osuCrypto::AES;
+
+template <typename T> using span = oc::span<T>;
+template <typename T> using Matrix = oc::Matrix<T>;
+template <typename T> using MatrixView = oc::MatrixView<T>;
+
+enum Mode {
+  Sender = 1,
+  Receiver = 2
+  // Dual = 3
+};
+
+enum class Role { Sender, Receiver };
+
+struct RequiredBase {
+  u64 mNumSend;
+  oc::BitVector mRecvChoiceBits;
+};
+
+using PRNG = oc::PRNG;
+using Socket = coproto::Socket;
+using Proto = coproto::task<void>;
+
+const bool isImplement = true;
+const u64 kappa = 40; // security parameter
+                      // const u64 kappa = 40; // input length to PEQT
+} // namespace CmpFuzzyPSI

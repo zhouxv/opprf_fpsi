@@ -269,16 +269,16 @@ void vole_silent_test_impl(const oc::CLP &cmd) {
   PRNG prng(sysRandomSeed());
 
   // the LPN compression type.
-  MultType mulType = DefaultMultType;
+  MultType mulType = oc::DefaultMultType;
   // regular noise or stationary noise.
   SdNoiseDistribution noiseType = SdNoiseDistribution::Regular;
   // the security type, semi-honest or malicious.
-  SilentSecType malType = SilentSecType::SemiHonest;
+  oc::SilentSecType malType = oc::SilentSecType::SemiHonest;
   // should we use only base ots Base or a hybrid of base and extend BaseExtend.
-  SilentBaseType baseType = SilentBaseType::BaseExtend;
+  oc::SilentBaseType baseType = oc::SilentBaseType::BaseExtend;
 
-  SilentVoleSender<F, G> sender;
-  SilentVoleReceiver<F, G> receiver;
+  oc::SilentVoleSender<F, G> sender;
+  oc::SilentVoleReceiver<F, G> receiver;
 
   Ctx ctx;
 
@@ -335,16 +335,16 @@ void test_vole_slient(const oc::CLP &cmd) {
   PRNG prng(sysRandomSeed());
 
   // the LPN compression type.
-  MultType mulType = DefaultMultType;
+  MultType mulType = oc::DefaultMultType;
   // regular noise or stationary noise.
   SdNoiseDistribution noiseType = SdNoiseDistribution::Regular;
   // the security type, semi-honest or malicious.
-  SilentSecType malType = SilentSecType::SemiHonest;
+  oc::SilentSecType malType = oc::SilentSecType::SemiHonest;
   // should we use only base ots Base or a hybrid of base and extend BaseExtend.
-  SilentBaseType baseType = SilentBaseType::BaseExtend;
+  oc::SilentBaseType baseType = oc::SilentBaseType::BaseExtend;
 
-  SilentVoleSender<u32, u32> sender;
-  SilentVoleReceiver<u32, u32> receiver;
+  oc::SilentVoleSender<u32, u32> sender;
+  oc::SilentVoleReceiver<u32, u32> receiver;
 
   // 𝔽   𝔽   𝔾    𝔽
   // A = B + C * DELTA

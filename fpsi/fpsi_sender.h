@@ -1,3 +1,4 @@
+#include "cmp_fmap/fmap.h"
 #include "config.h"
 #include "fpsi_base.h"
 #include "utils/params_selects.h"
@@ -53,40 +54,6 @@ public:
     // sender_prng.SetSeed(block(123, 123));
   };
 
-  // Figure 9 dFmap
-  vector<u64> IDs;
-  vector<u32> fm_mask;
-  ipcl::CipherText IDs_ct;
-  ipcl::PlainText mask_mul0_pt;
-  vector<vector<block>> get_id_encoding;
-  vector<u64> fig9_ID_ys;
-
-  void getID();
-  void DFmap_fig9_offline();
-  void DFmap_fig9_offline_fake();
-  void DFmap_fig9_online();
-
-  // Figure 9 PSI
-  void psi_offline();
-  void psi_offline_fake();
-  void psi_online();
-  template <CuckooTypes Mode> void mp_ssFMat_linf(CuckooIndex<Mode> &ct);
-  template <CuckooTypes Mode> void mp_ssFMat_lp(CuckooIndex<Mode> &ct);
-  void ssIFMat_send(const oc::span<u64> &u_sums);
-
-  // Figure 8 dFmap
-  vector<block> t_y_j;
-  vector<block> fig8_ID_ys;
-
-  void DFmap_fig8_offline();
-  void DFmap_fig8_online();
-
-  // Figure 8 PSI
-  void psi_offline_fig8();
-  void psi_online_fig8();
-  template <CuckooTypes Mode> void mp_ssFMat_linf_fig8(CuckooIndex<Mode> &ct);
-  template <CuckooTypes Mode> void mp_ssFMat_lp_fig8(CuckooIndex<Mode> &ct);
-
   // spatial hash PSI
   vector<block> sh_ID_ys;
   template <CuckooTypes Mode> void mp_ssFMat_linf_sh(CuckooIndex<Mode> &ct);
@@ -95,7 +62,47 @@ public:
   void psi_online_sh();
 
   // cmp fmap psi
+  vector<block> cmp_ID;
+  vector<block> sender_data;
+  CmpFuzzyPSI::FmapSender cmp_fmap_sender;
   void psi_offline_cmp();
   void psi_online_cmp();
   void cmp_fmap();
+  void cmp_fmap_offline();
+  void cmp_fmap_online();
+  template <CuckooTypes Mode> void mp_ssFMat_linf(CuckooIndex<Mode> &ct);
+  template <CuckooTypes Mode> void mp_ssFMat_lp(CuckooIndex<Mode> &ct);
+  void ssIFMat_send(const oc::span<u64> &u_sums);
+
+  // Figure 9 dFmap
+  // vector<u64> fig9_ID_ys;
+  // vector<u64> IDs;
+  // vector<u32> fm_mask;
+  // ipcl::CipherText IDs_ct;
+  // ipcl::PlainText mask_mul0_pt;
+  // vector<vector<block>> get_id_encoding;
+
+  // void getID();
+  // void DFmap_fig9_offline();
+  // void DFmap_fig9_offline_fake();
+  // void DFmap_fig9_online();
+
+  // Figure 9 PSI
+  // void psi_offline();
+  // void psi_offline_fake();
+  // void psi_online();
+
+  // Figure 8 dFmap
+  // vector<block> t_y_j;
+  // vector<block> fig8_ID_ys;
+
+  // void DFmap_fig8_offline();
+  // void DFmap_fig8_online();
+
+  // Figure 8 PSI
+  // void psi_offline_fig8();
+  // void psi_online_fig8();
+  // template <CuckooTypes Mode> void mp_ssFMat_linf_fig8(CuckooIndex<Mode>
+  // &ct); template <CuckooTypes Mode> void mp_ssFMat_lp_fig8(CuckooIndex<Mode>
+  // &ct);
 };

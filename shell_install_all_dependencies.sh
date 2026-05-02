@@ -62,9 +62,8 @@ install_securejoin() {
     rm -rf secure-join
 
     printf "################## Cloning secure-join repository ###################\n\n"
-    git clone https://github.com/ladnir/secure-join.git
+    git clone https://github.com/zhouxv/secure-join.git
     cd secure-join
-    git checkout 377ca63b9d8f4f6aede0d3a2e3d9078973a3ee10
 
     printf "################## Building secure-join             ###################\n\n"
     python3 build.py -DFETCH_SODIUM=ON -DOC_THIRDPARTY_HINT="$(pwd)/out/install/linux"

@@ -1,4 +1,5 @@
 #pragma once
+#define FMT_DEPRECATED_OSTREAM 1
 #include "opprf/Defines.h"
 #include <cryptoTools/Common/Defines.h>
 #include <cryptoTools/Common/block.h>
@@ -8,7 +9,6 @@
 #include <vector>
 
 // usr for print block data
-#define FMT_DEPRECATED_OSTREAM 1
 
 using namespace oc;
 using namespace std;
