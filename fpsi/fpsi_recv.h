@@ -72,9 +72,9 @@ public:
   CmpFuzzyPSI::FmapReceiver cmp_fmap_receiver;
   void cmp_fmap_offline();
   void cmp_fmap_online();
-  void cmp_fmap();
   void psi_offline_cmp();
   void psi_online_cmp();
+
   void mp_ssFMat_linf(SimpleIndex &st);
   void mp_ssFMat_lp(SimpleIndex &st);
   void ssIFMat_recv(const oc::span<u64> &v_sums);

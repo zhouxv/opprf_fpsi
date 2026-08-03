@@ -602,11 +602,6 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
 /*
 cmp fmap
 */
-void FPSIRecv::cmp_fmap() {
-  cmp_ID.resize(PTS_NUM);
-  recv_prng.get(cmp_ID.data(), PTS_NUM);
-}
-
 void FPSIRecv::cmp_fmap_offline() {
   macoro::sync_wait(cmp_fmap_receiver.setUp(PTS_NUM, PTS_NUM, DIM, DELTA, 0,
                                             recv_prng, sockets[0]));
