@@ -21,7 +21,7 @@ void printUsage() {
       << "  ./main [options]\n\n"
       << "Protocol Selection:\n"
       << "  -p <protocol>    Protocol type (default: 1)\n"
-      << "                   1 = FMAP protocol\n"
+      << "                   1 = CMP FMAP protocol\n"
       << "                   2 = FPSI protocol\n\n"
       << "Protocol Parameters:\n"
       << "  -n <size>        Set size (logarithm), default: 8\n"
@@ -34,9 +34,10 @@ void printUsage() {
       << "  -delta <value>   Distance threshold, default: 10\n"
       << "                   Supported values: 10, 30, 60, 120, 250\n"
       << "  -i <size>        Intersection size, default: 15\n"
-      << "  -fm <type>       Fuzzy mapping variant, default: 1\n"
-      << "                   0 = Fig.7 (1,1) DFmap\n"
+      << "  -fm <type>       Fuzzy mapping variant, default: 1, only work for "
+         "p=2(Fpsi protocol)\n"
       << "                   1 = spatial_hash (d,d) DFmap\n\n"
+      << "                   2 = cmp fmap\n\n"
       << "Network Configuration:\n"
       << "  -ip <address>    Server IP address, default: \"127.0.0.1\"\n"
       << "  -port <number>   Server port, default: 1212\n\n"
@@ -54,7 +55,7 @@ void printUsage() {
 }
 
 int main(int argc, char **argv) {
-  CLP cmd;
+  oc::CLP cmd;
   cmd.parse(argc, argv);
 
   /*

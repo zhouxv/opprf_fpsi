@@ -6,10 +6,6 @@
 #include "opprf/SimpleIndex.h"
 #include "pis_new/batch_peqt.h"
 #include "pis_new/batch_pis_new.h"
-#include "rb_okvs/rb_okvs.h"
-
-#include "utils/commu_util.h"
-#include "utils/data_conversion_util.h"
 #include "utils/dist_util.h"
 #include "utils/okvs_util.h"
 #include "utils/params_selects.h"
@@ -139,7 +135,7 @@ void FPSIRecv::psi_online_sh() {
   }
   psi_online_timer.end("recv_ssFmat_sh");
 
-  spdlog::info("  Recv step3: mp_ssFMath_L{}_sh finished!",
+  spdlog::info("  Recv step3: mp_ssFMat_L{}_sh finished!",
                (METRIC == 0) ? "inf" : std::to_string(METRIC));
 
   /* ---------------------------------------------------------------------------*/
@@ -216,7 +212,7 @@ void FPSIRecv::mp_ssFMat_linf_sh(SimpleIndex &st) {
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /* ---------------------------------------------------------------------------*/
     // step 1: recv getList
@@ -370,12 +366,15 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
   u64 a_random_stride = DIM * 2;
   u64 vole_stride = DIM * (METRIC - 1);
 
-  // prepare v_
-  oc::Matrix<u32> v_(bins_num, DIM);
+  /*
+   * 最终 Receiver 份额：
+   * v_hat(bin_idx, dim_index)
+   */
+  oc::Matrix<u32> v_hat(bins_num, DIM);
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /*---------------------------------------------------------------------------*/
     // step 1: recv getList_lp
@@ -514,53 +513,109 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
                     dim_index);
 
     /*---------------------------------------------------------------------------*/
-    // step 4: PIS sender
+    // step 5: second bOPPRF
     /*---------------------------------------------------------------------------*/
-    vector<u32> a0(bins_num);
+
+    RsOpprfReceiver opprf_recv_step5;
+
+    /*
+     * 每个 bin 查询一个 a0。
+     */
+    vector<block> a0_queries(bins_num);
+
+    /*
+     * 第二次 bOPPRF 输出：
+     *
+     * p == 1:
+     *   1 column:
+     *     q_i
+     *
+     * p > 1:
+     *   p columns:
+     *     v_1, ..., v_{p-1}, q_i
+     */
+    oc::Matrix<u32> selected_vals(bins_num, METRIC);
+
     for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
-      a0[bin_idx] = a_random[bin_idx * a_random_stride + dim_index * 2];
+      const u64 random_idx = bin_idx * a_random_stride + dim_index * 2;
+
+      const u32 a0 = a_random[random_idx];
+
+      a0_queries[bin_idx] = block(static_cast<u64>(a0));
     }
-    u64 batch_size = delta_param.first.size() + delta_plus_param.first.size();
-    u64 batch_num = bins_num;
 
     dim_thread_timer.start();
-    auto pis_sender =
-        Batch_PIS_send_new(a0, batch_size, batch_num, sockets[dim_index]);
-    sync_wait(pis_sender);
-    dim_thread_timer.end(fmt::format("recv_{}_fmat_sh_step4_pis", dim_index));
 
-    insert_commus(fmt::format("recv_{}_pis_step4", dim_index), dim_index);
+    /*
+     * opprf_size_other 是 Sender 第一次返回的 keys_size，
+     * 也就是第二次 OPPRF 中 Sender 编程的候选数量。
+     */
+    coproto::sync_wait(opprf_recv_step5.receive(opprf_size_other, a0_queries,
+                                                selected_vals, prng, 1,
+                                                sockets[dim_index]));
 
-    if (dim_index == 0)
-      spdlog::debug(
-          "\t[recv] mp_ssFMat_sh thread [{}] —— step4 PIS sender finished!",
-          dim_index);
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_sh_step5_opprf", dim_index));
+
+    insert_commus(fmt::format("recv_{}_fmat_sh_step5", dim_index), dim_index);
+
+    if (dim_index == 0) {
+      spdlog::debug("\t[recv] mp_ssFMat_sh thread [{}] —— "
+                    "step5 second RsOpprfReceiver finished!",
+                    dim_index);
+    }
 
     /*---------------------------------------------------------------------------*/
-    // step 5: copute v_
+    // step 5: compute receiver share v_hat
     /*---------------------------------------------------------------------------*/
-    if (METRIC == 1) {
-      // metric == 1
-      for (u64 i = 0; i < bins_num; i++) {
-        v_(i, dim_index) = a_random[i * a_random_stride + dim_index * 2 + 1];
+
+    for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
+      const u64 random_idx = bin_idx * a_random_stride + dim_index * 2;
+
+      /*
+       * a_random[random_idx]     = a0
+       * a_random[random_idx + 1] = ap
+       */
+      const u32 ap = a_random[random_idx + 1];
+
+      /*
+       * selected_vals 最后一列：
+       *
+       * q_i = mask_i - candidate_u_hat
+       */
+      const u32 q_i = selected_vals(bin_idx, METRIC - 1);
+
+      /*
+       * p == 1 时：
+       *
+       * v_hat_i = a1 + q_i
+       *
+       * 因为下面的循环为空。
+       */
+      u32 v_hat_i = ap + q_i;
+
+      /*
+       * p > 1:
+       *
+       * v_hat_i =
+       *   sum_s(v_s * a_s - c_s)
+       *   + ap + q_i
+       */
+      for (u64 s = 1; s < METRIC; s++) {
+        const u64 vole_idx =
+            bin_idx * vole_stride + dim_index * (METRIC - 1) + (s - 1);
+
+        const u32 v_i_s = selected_vals(bin_idx, s - 1);
+
+        v_hat_i += v_i_s * a_vole[vole_idx] - c_vole[vole_idx];
       }
-    } else {
-      // metric > 1
-      vector<u32> v_si(bins_num * (METRIC - 1));
-      cp::sync_wait(sockets[dim_index].recvResize(v_si));
 
-      u64 tmp_offset = dim_index * (METRIC - 1);
+      v_hat(bin_idx, dim_index) = v_hat_i;
+    }
 
-      for (u64 i = 0; i < bins_num; i++) {
-        for (u64 s = 1; s < METRIC; s++) {
-          v_(i, dim_index) +=
-              v_si[i * (METRIC - 1) + (s - 1)] *
-                  a_vole[i * vole_stride + tmp_offset + (s - 1)] -
-              c_vole[i * vole_stride + tmp_offset + (s - 1)];
-        }
-
-        v_(i, dim_index) += a_random[i * a_random_stride + dim_index * 2 + 1];
-      }
+    if (dim_index == 0) {
+      spdlog::debug("\t[recv] mp_ssFMat_sh thread [{}] —— "
+                    "step5 v_hat computed!",
+                    dim_index);
     }
 
     fpsi_timer.merge(dim_thread_timer);
@@ -580,14 +635,14 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
   fmat_timer.end("recv_fmat_sh_threads_all_lp");
 
   /*---------------------------------------------------------------------------*/
-  // step 5: copute v_ and F_ssIFMatch
+  // step 6: sum v_hat and invoke ssIFMat
   /*---------------------------------------------------------------------------*/
   vector<u64> v_sums(bins_num, 0);
-  for (u64 i = 0; i < bins_num; i++) {
-    for (u64 j = 0; j < DIM; j++) {
-      v_sums[i] += v_(i, j);
+
+  for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
+    for (u64 dim_index = 0; dim_index < DIM; dim_index++) {
+      v_sums[bin_idx] += v_hat(bin_idx, dim_index);
     }
-    // v_sums[i] += fast_pow(DELTA, METRIC) / 2;
   }
 
   fmat_timer.start();
@@ -710,7 +765,7 @@ void FPSIRecv::psi_online_cmp() {
   }
   psi_online_timer.end("recv_ssFmat");
 
-  spdlog::info("  Recv step3: mp_ssFMath_L{} finished!",
+  spdlog::info("  Recv step3: mp_ssFMat_L{} finished!",
                (METRIC == 0) ? "inf" : std::to_string(METRIC));
 
   /* ---------------------------------------------------------------------------*/
@@ -786,7 +841,7 @@ void FPSIRecv::mp_ssFMat_linf(SimpleIndex &st) {
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /* ---------------------------------------------------------------------------*/
     // step 1: recv getList
@@ -933,12 +988,11 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
   u64 a_random_stride = DIM * 2;
   u64 vole_stride = DIM * (METRIC - 1);
 
-  // prepare v_
-  oc::Matrix<u32> v_(bins_num, DIM);
+  oc::Matrix<u32> v_hat(bins_num, DIM);
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /*---------------------------------------------------------------------------*/
     // step 1: recv getList_lp
@@ -1071,54 +1125,91 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
           dim_index);
 
     /*---------------------------------------------------------------------------*/
-    // step 4: PIS sender
+    // step 5: opprf and compute v_hat
     /*---------------------------------------------------------------------------*/
-    vector<u32> a0(bins_num);
+    RsOpprfReceiver opprf_recv;
+
+    vector<block> a0(bins_num);
+    // prepare v
+    oc::Matrix<u32> v(bins_num, METRIC);
+
     for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
-      a0[bin_idx] = a_random[bin_idx * a_random_stride + dim_index * 2];
+      a0[bin_idx] = block(a_random[bin_idx * a_random_stride + dim_index * 2]);
     }
-    u64 batch_size = delta_param.first.size() + delta_plus_param.first.size();
-    u64 batch_num = bins_num;
 
     dim_thread_timer.start();
-    auto pis_sender =
-        Batch_PIS_send_new(a0, batch_size, batch_num, sockets[dim_index]);
-    sync_wait(pis_sender);
-    dim_thread_timer.end(fmt::format("recv_{}_fmat_step4_pis", dim_index));
+    coproto::sync_wait(opprf_recv.receive(opprf_size_other, a0, v, prng, 1,
+                                          sockets[dim_index]));
 
-    insert_commus(fmt::format("recv_{}_pis_step4", dim_index), dim_index);
+    dim_thread_timer.end(fmt::format("recv_{}_fmat_step5_opprf", dim_index));
+    insert_commus(fmt::format("recv_{}_fmat_step5", dim_index), dim_index);
 
-    if (dim_index == 0)
-      spdlog::debug(
-          "\t[recv] mp_ssFMat thread [{}] —— step4 PIS sender finished!",
-          dim_index);
+    spdlog::debug(
+        "\t[recv] mp_ssFMat thread [{}] —— step5 RsOpprfReceiver finished!",
+        dim_index);
 
     /*---------------------------------------------------------------------------*/
-    // step 5: copute v_
+    // step 6: compute v_hat
     /*---------------------------------------------------------------------------*/
-    if (METRIC == 1) {
-      // metric == 1
-      for (u64 i = 0; i < bins_num; i++) {
-        v_(i, dim_index) = a_random[i * a_random_stride + dim_index * 2 + 1];
+    for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
+      /*
+       * a_random 中每个 (bin, dimension) 存储：
+       *
+       *   a_random[random_idx]     = a_0[i]
+       *   a_random[random_idx + 1] = a_p[i]
+       */
+      const u64 random_idx = bin_idx * a_random_stride + dim_index * 2;
+
+      const u32 ap = a_random[random_idx + 1];
+
+      /*
+       * 最后一列是第二次 bOPPRF 返回的：
+       *
+       *   mask_i
+       */
+      const u32 mask_i = v(bin_idx, METRIC - 1);
+
+      /*
+       * 从：
+       *
+       *   a_p[i] + mask_i
+       *
+       * 开始累加。
+       *
+       * 当 METRIC == 1 时，下面的 s 循环为空，因此：
+       *
+       *   v_hat_i = a_1[i] + mask_i
+       */
+      u32 v_hat_i = ap + mask_i;
+
+      /*
+       * p > 1:
+       *
+       * v_hat_i =
+       *   sum_{s=1}^{p-1}
+       *     (v_{i,s} * a_s[i] - c_s[i])
+       *   + a_p[i]
+       *   + q_i
+       */
+      for (u64 s = 1; s < METRIC; s++) {
+        const u64 vole_idx =
+            bin_idx * vole_stride + dim_index * (METRIC - 1) + (s - 1);
+
+        const u32 v_i_s = v(bin_idx, s - 1);
+
+        v_hat_i += v_i_s * a_vole[vole_idx] - c_vole[vole_idx];
       }
-    } else {
-      // metric > 1
-      vector<u32> v_si(bins_num * (METRIC - 1));
-      cp::sync_wait(sockets[dim_index].recvResize(v_si));
 
-      u64 tmp_offset = dim_index * (METRIC - 1);
-
-      for (u64 i = 0; i < bins_num; i++) {
-        for (u64 s = 1; s < METRIC; s++) {
-          v_(i, dim_index) +=
-              v_si[i * (METRIC - 1) + (s - 1)] *
-                  a_vole[i * vole_stride + tmp_offset + (s - 1)] -
-              c_vole[i * vole_stride + tmp_offset + (s - 1)];
-        }
-
-        v_(i, dim_index) += a_random[i * a_random_stride + dim_index * 2 + 1];
-      }
+      /*
+       * 每个维度线程只写 v_hat 的对应列，
+       * 因此不同 dim_thread 不会写同一个元素。
+       */
+      v_hat(bin_idx, dim_index) = v_hat_i;
     }
+
+    spdlog::debug(
+        "\t[recv] mp_ssFMat thread [{}] —— step5 compute v_hat finished!",
+        dim_index);
 
     fpsi_timer.merge(dim_thread_timer);
   };
@@ -1137,12 +1228,12 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
   fmat_timer.end("recv_fmat_threads_all_lp");
 
   /*---------------------------------------------------------------------------*/
-  // step 5: copute v_ and F_ssIFMatch
+  // step 6: copute v_ and F_ssIFMatch
   /*---------------------------------------------------------------------------*/
   vector<u64> v_sums(bins_num, 0);
   for (u64 i = 0; i < bins_num; i++) {
     for (u64 j = 0; j < DIM; j++) {
-      v_sums[i] += v_(i, j);
+      v_sums[i] += v_hat(i, j);
     }
     // v_sums[i] += fast_pow(DELTA, METRIC) / 2;
   }
@@ -1159,7 +1250,7 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
 // one dimension ssIFMat recv
 void FPSIRecv::ssIFMat_recv(const oc::span<u64> &v_sums) {
   u64 bins_num = v_sums.size();
-  PRNG prng(oc::sysRandomSeed());
+  oc::PRNG prng(oc::sysRandomSeed());
 
   /* ---------------------------------------------------------------------------*/
   // step 1: Recv ssIFMat Set_Dec
@@ -1420,7 +1511,7 @@ void FPSIRecv::DFmap_fig9_offline() {
 }
 
 void FPSIRecv::DFmap_fig9_offline_fake() {
-  PRNG prng(oc::sysRandomSeed());
+  oc::PRNG prng(oc::sysRandomSeed());
   IDs.resize(PTS_NUM, 0);
   prng.get(IDs.data(), IDs.size());
 
@@ -1740,7 +1831,7 @@ void FPSIRecv::psi_online() {
   }
   psi_online_timer.end("recv_ssFmat");
 
-  spdlog::info("  Recv step3: mp_ssFMath_L{} finished!",
+  spdlog::info("  Recv step3: mp_ssFMat_L{} finished!",
                (METRIC == 0) ? "inf" : std::to_string(METRIC));
 
   /* ---------------------------------------------------------------------------*/
@@ -1995,7 +2086,7 @@ void FPSIRecv::psi_online_fig8() {
   }
   psi_online_timer.end("recv_ssFmat_fig8");
 
-  spdlog::info("  Recv step3: mp_ssFMath_L{}_fig8 finished!",
+  spdlog::info("  Recv step3: mp_ssFMat_L{}_fig8 finished!",
                (METRIC == 0) ? "inf" : std::to_string(METRIC));
 
   /* ---------------------------------------------------------------------------*/
@@ -2072,7 +2163,7 @@ void FPSIRecv::mp_ssFMat_linf_fig8(SimpleIndex &st) {
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /* ---------------------------------------------------------------------------*/
     // step 1: recv getList
@@ -2232,7 +2323,7 @@ void FPSIRecv::mp_ssFMat_lp_fig8(SimpleIndex &st) {
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /*---------------------------------------------------------------------------*/
     // step 1: recv getList_lp

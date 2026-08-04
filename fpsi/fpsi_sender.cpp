@@ -1,4 +1,5 @@
 #include "fpsi_sender.h"
+
 #include "config.h"
 #include "opprf/Defines.h"
 #include "opprf/Opprf.h"
@@ -199,7 +200,7 @@ void FPSISender::mp_ssFMat_linf_sh(CuckooIndex<Mode> &ct) {
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /* ---------------------------------------------------------------------------*/
     // step 2: send set_prefix
@@ -340,14 +341,24 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
 
   u64 bins_num = ct.mNumBins;
 
-  u64 prefix_size_each_bin = delta_param.first.size() * 2;
-  u64 vole_stride = DIM * (METRIC - 1);
+  const u64 mu_0 = delta_plus_param.first.size();
+  const u64 mu_1 = delta_param.first.size();
+
+  const u64 prefix_size_each_bin = mu_0 + mu_1;
+  const u64 vole_stride = DIM * (METRIC - 1);
+
+  /*
+   * PKC 版本中，Sender 最终份额不再是选中的 candidate，
+   * 而是每个 (bin, dimension) 的随机 mask。
+   */
+  vector<u32> masks(bins_num * DIM);
+  sender_prng.get<u32>(masks.data(), masks.size());
 
   oc::Matrix<u32> u_(bins_num, DIM);
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /*---------------------------------------------------------------------------*/
     // step 2: send set_prefix
@@ -433,70 +444,137 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
                     dim_index);
 
     /*---------------------------------------------------------------------------*/
-    // step 4: PIS recv
+    // step 4: compute all u_hat candidates and v candidates
     /*---------------------------------------------------------------------------*/
-    u64 batch_size = delta_param.first.size() + delta_plus_param.first.size();
-    u64 batch_num = bins_num;
 
-    auto fisrt_column = extract_column_fast(u, 0);
+    vector<u32> u_hat_candidates(keys_size, 0);
+
+    /*
+     * 每一行的布局：
+     *
+     * p == 1:
+     *   column 0 = mask_i - u_hat_candidate
+     *
+     * p > 1:
+     *   column 0 ... p-2 = v_{i,1}, ..., v_{i,p-1}
+     *   column p-1       = mask_i - u_hat_candidate
+     */
+    oc::Matrix<u32> v_candidates(keys_size, METRIC);
 
     dim_thread_timer.start();
-    auto pis_recv = Batch_PIS_recv_new(fisrt_column, batch_size, batch_num,
-                                       sockets[dim_index]);
-    dim_thread_timer.end(fmt::format("sender_{}_fmat_sh_step4_pis", dim_index));
-
-    insert_commus(fmt::format("sender_{}_pis_step4", dim_index), dim_index);
-
-    auto idxs = sync_wait(pis_recv);
-
-    if (dim_index == 0)
-      spdlog::debug("\t[send] mp_ssFMat_sh thread [{}] —— step4 Batch_PIS_recv "
-                    "finished!",
-                    dim_index);
-    // if (dim_index == 0) {
-    //   for (u64 i = 0; i < 10; i++) {
-    //     spdlog::debug("\t[send] dim [{}] pis idxs[{}] {}", dim_index, i,
-    //                   idxs[i]);
-    //   }
-    // }
-
-    /*---------------------------------------------------------------------------*/
-    // step 5: compute u_
-    /*---------------------------------------------------------------------------*/
 
     if (METRIC == 1) {
-      // for metric == 1
-      for (u64 i = 0; i < bins_num; i++) {
-        auto pis_idx = idxs[i];
-        auto tmp_idx = i * prefix_size_each_bin + pis_idx;
-        u_[i][dim_index] = u[tmp_idx][1];
-        if (!ct.mBins[i].isEmpty()) {
-          u_[i][dim_index] += e[tmp_idx];
+      for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
+        for (u64 j = 0; j < prefix_size_each_bin; j++) {
+          const u64 tmp_idx = bin_idx * prefix_size_each_bin + j;
+
+          /*
+           * u_hat_candidate = u_1 + e
+           */
+          u_hat_candidates[tmp_idx] =
+              u[tmp_idx][1] + static_cast<u32>(e[tmp_idx]);
+
+          /*
+           * 第二次 bOPPRF 的唯一 payload：
+           *
+           * q_i = mask_i - u_hat_candidate
+           */
+          v_candidates(tmp_idx, 0) =
+              masks[bin_idx * DIM + dim_index] - u_hat_candidates[tmp_idx];
         }
       }
     } else {
-      // for metric > 1
-      vector<u32> v_si(bins_num * (METRIC - 1));
-      for (u64 i = 0; i < bins_num; i++) {
-        auto pis_idx = idxs[i];
-        auto tmp_idx = i * prefix_size_each_bin + pis_idx;
-        auto tmp_e = e[tmp_idx];
+      for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
+        for (u64 j = 0; j < prefix_size_each_bin; j++) {
+          const u64 tmp_idx = bin_idx * prefix_size_each_bin + j;
 
-        u_[i][dim_index] = u[tmp_idx][METRIC] + fast_pow<u32>(tmp_e, METRIC);
+          const u32 tmp_e = static_cast<u32>(e[tmp_idx]);
 
-        for (u64 s = 1; s < METRIC; s++) {
-          u32 mid_val =
-              combination<u32>(METRIC, s) * fast_pow<u32>(tmp_e, METRIC - s);
-          u_[i][dim_index] +=
-              mid_val * u[tmp_idx][s] -
-              d_vole[i * vole_stride + dim_index * (METRIC - 1) + (s - 1)];
-          v_si[i * (METRIC - 1) + (s - 1)] = mid_val + b_delta;
+          /*
+           * e^p + u_p
+           */
+          u_hat_candidates[tmp_idx] =
+              u[tmp_idx][METRIC] + fast_pow<u32>(tmp_e, METRIC);
+
+          for (u64 s = 1; s < METRIC; s++) {
+            const u32 mid_val =
+                combination<u32>(METRIC, s) * fast_pow<u32>(tmp_e, METRIC - s);
+
+            const u64 vole_idx =
+                bin_idx * vole_stride + dim_index * (METRIC - 1) + (s - 1);
+
+            /*
+             * candidate_u +=
+             *   C(p,s)e^(p-s)u_s - d_s
+             */
+            u_hat_candidates[tmp_idx] +=
+                mid_val * u[tmp_idx][s] - d_vole[vole_idx];
+
+            /*
+             * v_s = C(p,s)e^(p-s) + b_s
+             *
+             * 当前 VOLE 中各 s 共用 b_delta。
+             */
+            v_candidates(tmp_idx, s - 1) = mid_val + b_delta;
+          }
+
+          /*
+           * 最后一列：
+           *
+           * q_i = mask_i - u_hat_candidate
+           */
+          v_candidates(tmp_idx, METRIC - 1) =
+              masks[bin_idx * DIM + dim_index] - u_hat_candidates[tmp_idx];
         }
       }
+    }
 
-      cp::sync_wait(sockets[dim_index].send(v_si));
-      cp::sync_wait(sockets[dim_index].flush());
-      insert_commus(fmt::format("sender_{}_fmat_sh_vis", dim_index), dim_index);
+    dim_thread_timer.end(
+        fmt::format("sender_{}_fmat_sh_step4_candidates", dim_index));
+
+    if (dim_index == 0) {
+      spdlog::debug("\t[send] mp_ssFMat_sh thread [{}] —— "
+                    "step4 all candidates computed!",
+                    dim_index);
+    }
+
+    /*---------------------------------------------------------------------------*/
+    // step 5: second bOPPRF
+    /*---------------------------------------------------------------------------*/
+
+    /*
+     * 第二次 bOPPRF 的 Sender key：
+     *
+     *   u_{sigma,i,j,0}
+     */
+    auto u0_values = extract_column_fast(u, 0);
+
+    vector<block> u0_keys(u0_values.size());
+
+    for (u64 idx = 0; idx < u0_values.size(); idx++) {
+      u0_keys[idx] = block(static_cast<u64>(u0_values[idx]));
+    }
+
+    RsOpprfSender opprf_sender_step5;
+
+    dim_thread_timer.start();
+
+    /*
+     * Receiver 一共有 bins_num 个查询 a0，
+     * Sender 一共有 keys_size 个编程点。
+     */
+    coproto::sync_wait(opprf_sender_step5.send(bins_num, u0_keys, v_candidates,
+                                               prng, 1, sockets[dim_index]));
+
+    dim_thread_timer.end(
+        fmt::format("sender_{}_fmat_sh_step5_opprf", dim_index));
+
+    insert_commus(fmt::format("sender_{}_fmat_sh_step5", dim_index), dim_index);
+
+    if (dim_index == 0) {
+      spdlog::debug("\t[send] mp_ssFMat_sh thread [{}] —— "
+                    "step5 second RsOpprfSender finished!",
+                    dim_index);
     }
 
     fpsi_timer.merge(dim_thread_timer);
@@ -516,12 +594,13 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
   fmat_timer.end("sender_fmat_sh_threads_all_lp");
 
   /*---------------------------------------------------------------------------*/
-  // step 5: copute v_ and F_ssIFMatch
+  // step 6: copute v_ and F_ssIFMatch
   /*---------------------------------------------------------------------------*/
   vector<u64> u_sums(bins_num, 0);
-  for (u64 i = 0; i < bins_num; i++) {
-    for (u64 j = 0; j < DIM; j++) {
-      u_sums[i] += u_[i][j];
+
+  for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
+    for (u64 dim_index = 0; dim_index < DIM; dim_index++) {
+      u_sums[bin_idx] += masks[bin_idx * DIM + dim_index];
     }
   }
 
@@ -730,7 +809,7 @@ void FPSISender::mp_ssFMat_linf(CuckooIndex<Mode> &ct) {
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /* ---------------------------------------------------------------------------*/
     // step 2: send set_prefix
@@ -871,11 +950,12 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
   u64 prefix_size_each_bin = delta_param.first.size() * 2;
   u64 vole_stride = DIM * (METRIC - 1);
 
-  oc::Matrix<u32> u_(bins_num, DIM);
+  vector<u32> masks(bins_num * DIM);
+  sender_prng.get<u32>(masks.data(), bins_num * DIM);
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /*---------------------------------------------------------------------------*/
     // step 2: send set_prefix
@@ -959,71 +1039,72 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
                     dim_index);
 
     /*---------------------------------------------------------------------------*/
-    // step 4: PIS recv
+    // step 4: compute u_hat_{sigma,i,j} and v_{sigma,i,j,s}
     /*---------------------------------------------------------------------------*/
-    u64 batch_size = delta_param.first.size() + delta_plus_param.first.size();
-    u64 batch_num = bins_num;
-
-    auto fisrt_column = extract_column_fast(u, 0);
-
+    vector<u32> u_hat_candidates(keys_size, 0);
+    oc::Matrix<u32> v_candidates(keys_size, METRIC);
     dim_thread_timer.start();
-    auto pis_recv = Batch_PIS_recv_new(fisrt_column, batch_size, batch_num,
-                                       sockets[dim_index]);
-    dim_thread_timer.end(fmt::format("sender_{}_fmat_step4_pis", dim_index));
-
-    insert_commus(fmt::format("sender_{}_pis_step4", dim_index), dim_index);
-
-    auto idxs = sync_wait(pis_recv);
-
-    if (dim_index == 0)
-      spdlog::debug("\t[send] mp_ssFMat thread [{}] —— step4 Batch_PIS_recv "
-                    "finished!",
-                    dim_index);
-    // if (dim_index == 0) {
-    //   for (u64 i = 0; i < 10; i++) {
-    //     spdlog::debug("\t[send] dim [{}] pis idxs[{}] {}", dim_index, i,
-    //                   idxs[i]);
-    //   }
-    // }
-
-    /*---------------------------------------------------------------------------*/
-    // step 5: compute u_
-    /*---------------------------------------------------------------------------*/
-
     if (METRIC == 1) {
-      // for metric == 1
       for (u64 i = 0; i < bins_num; i++) {
-        auto pis_idx = idxs[i];
-        auto tmp_idx = i * prefix_size_each_bin + pis_idx;
-        u_[i][dim_index] = u[tmp_idx][1];
-        if (!ct.mBins[i].isEmpty()) {
-          u_[i][dim_index] += e[tmp_idx];
+        for (u64 j = 0; j < prefix_size_each_bin; j++) {
+          auto tmp_idx = i * prefix_size_each_bin + j;
+          u_hat_candidates[tmp_idx] = u[tmp_idx][1] + e[tmp_idx];
+          v_candidates[tmp_idx][METRIC - 1] =
+              masks[i * DIM + dim_index] - u_hat_candidates[tmp_idx];
         }
       }
     } else {
       // for metric > 1
-      vector<u32> v_si(bins_num * (METRIC - 1));
       for (u64 i = 0; i < bins_num; i++) {
-        auto pis_idx = idxs[i];
-        auto tmp_idx = i * prefix_size_each_bin + pis_idx;
-        auto tmp_e = e[tmp_idx];
+        for (u64 j = 0; j < prefix_size_each_bin; j++) {
 
-        u_[i][dim_index] = u[tmp_idx][METRIC] + fast_pow<u32>(tmp_e, METRIC);
+          auto tmp_idx = i * prefix_size_each_bin + j;
+          auto tmp_e = e[tmp_idx];
 
-        for (u64 s = 1; s < METRIC; s++) {
-          u32 mid_val =
-              combination<u32>(METRIC, s) * fast_pow<u32>(tmp_e, METRIC - s);
-          u_[i][dim_index] +=
-              mid_val * u[tmp_idx][s] -
-              d_vole[i * vole_stride + dim_index * (METRIC - 1) + (s - 1)];
-          v_si[i * (METRIC - 1) + (s - 1)] = mid_val + b_delta;
+          u_hat_candidates[tmp_idx] =
+              u[tmp_idx][METRIC] + fast_pow<u32>(tmp_e, METRIC);
+
+          for (u64 s = 1; s < METRIC; s++) {
+            auto mid_val =
+                combination<u32>(METRIC, s) * fast_pow<u32>(tmp_e, METRIC - s);
+            u_hat_candidates[tmp_idx] +=
+                mid_val * u[tmp_idx][s] -
+                d_vole[i * vole_stride + dim_index * (METRIC - 1) + (s - 1)];
+            v_candidates[tmp_idx][s - 1] = mid_val + b_delta;
+          }
+
+          v_candidates[tmp_idx][METRIC - 1] =
+              masks[i * DIM + dim_index] - u_hat_candidates[tmp_idx];
         }
       }
+      dim_thread_timer.end(fmt::format("sender_{}_fmat_step4_cmp", dim_index));
 
-      cp::sync_wait(sockets[dim_index].send(v_si));
-      cp::sync_wait(sockets[dim_index].flush());
-      insert_commus(fmt::format("sender_{}_fmat_vis", dim_index), dim_index);
+      spdlog::debug("\t[send] mp_ssFMat thread [{}] —— step4 compute u_hat and "
+                    "v finished!",
+                    dim_index);
     }
+
+    /*---------------------------------------------------------------------------*/
+    // step 5: opprf
+    /*---------------------------------------------------------------------------*/
+    auto u_sigma_i_j_0 = extract_column_fast(u, 0);
+    vector<block> u_sigma_i_j_0_blocks(u_sigma_i_j_0.size());
+    for (u64 i = 0; i < u_sigma_i_j_0.size(); i++) {
+      u_sigma_i_j_0_blocks[i] = block(u_sigma_i_j_0[i]);
+    }
+
+    RsOpprfSender opprf_sender;
+    dim_thread_timer.start();
+    coproto::sync_wait(opprf_sender.send(bins_num, u_sigma_i_j_0_blocks,
+                                         v_candidates, prng, 1,
+                                         sockets[dim_index]));
+    dim_thread_timer.end(fmt::format("sender_{}_fmat_step5_opprf", dim_index));
+
+    insert_commus(fmt::format("sender_{}_fmat_step5", dim_index), dim_index);
+
+    spdlog::debug(
+        "\t[send] mp_ssFMat thread [{}] —— step5 RsOpprfSender finished!",
+        dim_index);
 
     fpsi_timer.merge(dim_thread_timer);
   };
@@ -1042,12 +1123,12 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
   fmat_timer.end("sender_fmat_threads_all_lp");
 
   /*---------------------------------------------------------------------------*/
-  // step 5: copute v_ and F_ssIFMatch
+  // step 6: copute u_sums and F_ssIFMatch
   /*---------------------------------------------------------------------------*/
   vector<u64> u_sums(bins_num, 0);
   for (u64 i = 0; i < bins_num; i++) {
     for (u64 j = 0; j < DIM; j++) {
-      u_sums[i] += u_[i][j];
+      u_sums[i] += masks[i * DIM + j];
     }
   }
 
@@ -1062,7 +1143,7 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
 
 void FPSISender::ssIFMat_send(const oc::span<u64> &u_sums) {
   u64 bins_num = u_sums.size();
-  PRNG prng(oc::sysRandomSeed());
+  oc::PRNG prng(oc::sysRandomSeed());
 
   /* ---------------------------------------------------------------------------*/
   // step 1: Sender ssIFMat prefix
@@ -1367,7 +1448,7 @@ void FPSISender::DFmap_fig9_offline() {
 }
 
 void FPSISender::DFmap_fig9_offline_fake() {
-  PRNG prng(oc::sysRandomSeed());
+  oc::PRNG prng(oc::sysRandomSeed());
   IDs.resize(PTS_NUM, 0);
   prng.get(IDs.data(), IDs.size());
 
@@ -1929,7 +2010,7 @@ void FPSISender::mp_ssFMat_linf_fig8(CuckooIndex<Mode> &ct) {
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /* ---------------------------------------------------------------------------*/
     // step 2: send set_prefix
@@ -2079,7 +2160,7 @@ void FPSISender::mp_ssFMat_lp_fig8(CuckooIndex<Mode> &ct) {
 
   auto dim_thread = [&](u64 dim_index) {
     simpleTimer dim_thread_timer;
-    PRNG prng(oc::sysRandomSeed());
+    oc::PRNG prng(oc::sysRandomSeed());
 
     /*---------------------------------------------------------------------------*/
     // step 2: send set_prefix
