@@ -552,7 +552,11 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
     vector<block> u0_keys(u0_values.size());
 
     for (u64 idx = 0; idx < u0_values.size(); idx++) {
-      u0_keys[idx] = block(static_cast<u64>(u0_values[idx]));
+      const u64 bin_idx = idx / prefix_size_each_bin;
+      blake3_hasher_update(&hasher, &u0_values[idx], sizeof(u32));
+      blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+      blake3_hasher_finalize(&hasher, u0_keys[idx].data(), 16);
+      blake3_hasher_reset(&hasher);
     }
 
     RsOpprfSender opprf_sender_step5;
@@ -1090,7 +1094,11 @@ void FPSISender::mp_ssFMat_lp(CuckooIndex<Mode> &ct) {
     auto u_sigma_i_j_0 = extract_column_fast(u, 0);
     vector<block> u_sigma_i_j_0_blocks(u_sigma_i_j_0.size());
     for (u64 i = 0; i < u_sigma_i_j_0.size(); i++) {
-      u_sigma_i_j_0_blocks[i] = block(u_sigma_i_j_0[i]);
+      const u64 bin_idx = i / prefix_size_each_bin;
+      blake3_hasher_update(&hasher, &u_sigma_i_j_0[i], sizeof(u32));
+      blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+      blake3_hasher_finalize(&hasher, u_sigma_i_j_0_blocks[i].data(), 16);
+      blake3_hasher_reset(&hasher);
     }
 
     RsOpprfSender opprf_sender;

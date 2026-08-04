@@ -361,7 +361,7 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
   // generate a_random
   vector<u32> a_random(a_random_size);
   for (u64 i = 0; i < a_random_size; i++) {
-    a_random[i] = recv_prng.get<u32>() >> 1;
+    a_random[i] = recv_prng.get<u32>();
   }
   u64 a_random_stride = DIM * 2;
   u64 vole_stride = DIM * (METRIC - 1);
@@ -541,7 +541,10 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
 
       const u32 a0 = a_random[random_idx];
 
-      a0_queries[bin_idx] = block(static_cast<u64>(a0));
+      blake3_hasher_update(&hasher, &a0, sizeof(u32));
+      blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+      blake3_hasher_finalize(&hasher, a0_queries[bin_idx].data(), 16);
+      blake3_hasher_reset(&hasher);
     }
 
     dim_thread_timer.start();
@@ -983,7 +986,7 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
   // generate a_random
   vector<u32> a_random(a_random_size);
   for (u64 i = 0; i < a_random_size; i++) {
-    a_random[i] = recv_prng.get<u32>() >> 1;
+    a_random[i] = recv_prng.get<u32>();
   }
   u64 a_random_stride = DIM * 2;
   u64 vole_stride = DIM * (METRIC - 1);
@@ -1129,17 +1132,22 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
     /*---------------------------------------------------------------------------*/
     RsOpprfReceiver opprf_recv;
 
-    vector<block> a0(bins_num);
+    vector<block> a0_vector(bins_num);
     // prepare v
     oc::Matrix<u32> v(bins_num, METRIC);
 
     for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
-      a0[bin_idx] = block(a_random[bin_idx * a_random_stride + dim_index * 2]);
+      const u32 a0 = a_random[bin_idx * a_random_stride + dim_index * 2];
+
+      blake3_hasher_update(&hasher, &a0, sizeof(u32));
+      blake3_hasher_update(&hasher, &bin_idx, sizeof(u64));
+      blake3_hasher_finalize(&hasher, a0_vector[bin_idx].data(), 16);
+      blake3_hasher_reset(&hasher);
     }
 
     dim_thread_timer.start();
-    coproto::sync_wait(opprf_recv.receive(opprf_size_other, a0, v, prng, 1,
-                                          sockets[dim_index]));
+    coproto::sync_wait(opprf_recv.receive(opprf_size_other, a0_vector, v, prng,
+                                          1, sockets[dim_index]));
 
     dim_thread_timer.end(fmt::format("recv_{}_fmat_step5_opprf", dim_index));
     insert_commus(fmt::format("recv_{}_fmat_step5", dim_index), dim_index);
