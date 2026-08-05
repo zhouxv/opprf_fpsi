@@ -347,10 +347,6 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
   const u64 prefix_size_each_bin = mu_0 + mu_1;
   const u64 vole_stride = DIM * (METRIC - 1);
 
-  /*
-   * PKC 版本中，Sender 最终份额不再是选中的 candidate，
-   * 而是每个 (bin, dimension) 的随机 mask。
-   */
   vector<u32> masks(bins_num * DIM);
   sender_prng.get<u32>(masks.data(), masks.size());
 
@@ -450,7 +446,6 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
     vector<u32> u_hat_candidates(keys_size, 0);
 
     /*
-     * 每一行的布局：
      *
      * p == 1:
      *   column 0 = mask_i - u_hat_candidate
@@ -475,8 +470,6 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
               u[tmp_idx][1] + static_cast<u32>(e[tmp_idx]);
 
           /*
-           * 第二次 bOPPRF 的唯一 payload：
-           *
            * q_i = mask_i - u_hat_candidate
            */
           v_candidates(tmp_idx, 0) =
@@ -513,13 +506,14 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
             /*
              * v_s = C(p,s)e^(p-s) + b_s
              *
-             * 当前 VOLE 中各 s 共用 b_delta。
+             * b_delta is the same for all candidates, so we can add it here to
+             * reduce communication cost
              */
             v_candidates(tmp_idx, s - 1) = mid_val + b_delta;
           }
 
           /*
-           * 最后一列：
+           * the last column
            *
            * q_i = mask_i - u_hat_candidate
            */
@@ -543,8 +537,6 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
     /*---------------------------------------------------------------------------*/
 
     /*
-     * 第二次 bOPPRF 的 Sender key：
-     *
      *   u_{sigma,i,j,0}
      */
     auto u0_values = extract_column_fast(u, 0);
@@ -562,14 +554,8 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
     RsOpprfSender opprf_sender_step5;
 
     dim_thread_timer.start();
-
-    /*
-     * Receiver 一共有 bins_num 个查询 a0，
-     * Sender 一共有 keys_size 个编程点。
-     */
     coproto::sync_wait(opprf_sender_step5.send(bins_num, u0_keys, v_candidates,
                                                prng, 1, sockets[dim_index]));
-
     dim_thread_timer.end(
         fmt::format("sender_{}_fmat_sh_step5_opprf", dim_index));
 

@@ -191,7 +191,7 @@ void test_batch_peqt(const oc::CLP &cmd) {
   std::thread send_thread(
       [&]() { res1 = macoro::sync_wait(Batch_PEQT_send<block>(b, socket1)); });
 
-  // 等待线程结束
+  // wait for both threads to finish
   recv_thread.join();
   send_thread.join();
 
@@ -320,10 +320,10 @@ void vole_silent_test_impl(const oc::CLP &cmd) {
     }
 
   } catch (const std::exception &e) {
-    spdlog::error("测试失败: {}", e.what());
+    spdlog::error("error: {}", e.what());
   }
 
-  spdlog::info("✓ Silent VOLE 测试通过！({} 个元素)", numVole);
+  spdlog::info("✓ Silent VOLE test passed for {} elements", numVole);
 }
 
 void test_vole_slient(const oc::CLP &cmd) {
@@ -389,10 +389,10 @@ void test_vole_slient(const oc::CLP &cmd) {
     }
 
   } catch (const std::exception &e) {
-    spdlog::error("测试失败: {}", e.what());
+    spdlog::error("VOLE test failed: {}", numVole);
   }
 
-  spdlog::info("✓ Silent VOLE 测试通过！({} 个元素)", numVole);
+  spdlog::info("✓ Silent VOLE  test passed for {} elements", numVole);
 }
 
 void test_prefix_param(const oc::CLP &cmd) {
@@ -447,7 +447,7 @@ void test_prefix_param_lp(const oc::CLP &cmd) {
     }
   }
 
-  // 输出map，按照key的大小排序
+  // output the map, sorted by key size
   for (const auto &kv : map) {
     spdlog::info("delta: {}, count: {}", kv.first, kv.second);
   }
@@ -484,7 +484,7 @@ void test_prefix_param_linf(const oc::CLP &cmd) {
     }
   }
 
-  // 输出map，按照key的大小排序
+  // output the map, sorted by key size
   for (const auto &kv : map) {
     spdlog::info("delta: {}, count: {}", kv.first, kv.second);
   }
@@ -528,7 +528,7 @@ void test_prefix_param_ifmatch(const oc::CLP &cmd) {
     }
   }
 
-  // 输出map，按照key的大小排序
+  // output the map, sorted by key size
   for (const auto &kv : map) {
     spdlog::info("delta: {}, count: {}", kv.first, kv.second);
   }

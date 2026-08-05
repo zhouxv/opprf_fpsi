@@ -367,7 +367,6 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
   u64 vole_stride = DIM * (METRIC - 1);
 
   /*
-   * 最终 Receiver 份额：
    * v_hat(bin_idx, dim_index)
    */
   oc::Matrix<u32> v_hat(bins_num, DIM);
@@ -519,12 +518,12 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
     RsOpprfReceiver opprf_recv_step5;
 
     /*
-     * 每个 bin 查询一个 a0。
+     * a0_queries: a0 queries for second bOPPRF
      */
     vector<block> a0_queries(bins_num);
 
     /*
-     * 第二次 bOPPRF 输出：
+     * second bOPPRF output:
      *
      * p == 1:
      *   1 column:
@@ -548,15 +547,9 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
     }
 
     dim_thread_timer.start();
-
-    /*
-     * opprf_size_other 是 Sender 第一次返回的 keys_size，
-     * 也就是第二次 OPPRF 中 Sender 编程的候选数量。
-     */
     coproto::sync_wait(opprf_recv_step5.receive(opprf_size_other, a0_queries,
                                                 selected_vals, prng, 1,
                                                 sockets[dim_index]));
-
     dim_thread_timer.end(fmt::format("recv_{}_fmat_sh_step5_opprf", dim_index));
 
     insert_commus(fmt::format("recv_{}_fmat_sh_step5", dim_index), dim_index);
@@ -581,18 +574,12 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
       const u32 ap = a_random[random_idx + 1];
 
       /*
-       * selected_vals 最后一列：
-       *
        * q_i = mask_i - candidate_u_hat
        */
       const u32 q_i = selected_vals(bin_idx, METRIC - 1);
 
       /*
-       * p == 1 时：
-       *
-       * v_hat_i = a1 + q_i
-       *
-       * 因为下面的循环为空。
+       * p == 1： v_hat_i = a1 + q_i
        */
       u32 v_hat_i = ap + q_i;
 
@@ -1161,8 +1148,6 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
     /*---------------------------------------------------------------------------*/
     for (u64 bin_idx = 0; bin_idx < bins_num; bin_idx++) {
       /*
-       * a_random 中每个 (bin, dimension) 存储：
-       *
        *   a_random[random_idx]     = a_0[i]
        *   a_random[random_idx + 1] = a_p[i]
        */
@@ -1170,22 +1155,10 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
 
       const u32 ap = a_random[random_idx + 1];
 
-      /*
-       * 最后一列是第二次 bOPPRF 返回的：
-       *
-       *   mask_i
-       */
       const u32 mask_i = v(bin_idx, METRIC - 1);
 
       /*
-       * 从：
-       *
-       *   a_p[i] + mask_i
-       *
-       * 开始累加。
-       *
-       * 当 METRIC == 1 时，下面的 s 循环为空，因此：
-       *
+       *  METRIC == 1：
        *   v_hat_i = a_1[i] + mask_i
        */
       u32 v_hat_i = ap + mask_i;
@@ -1208,10 +1181,6 @@ void FPSIRecv::mp_ssFMat_lp(SimpleIndex &st) {
         v_hat_i += v_i_s * a_vole[vole_idx] - c_vole[vole_idx];
       }
 
-      /*
-       * 每个维度线程只写 v_hat 的对应列，
-       * 因此不同 dim_thread 不会写同一个元素。
-       */
       v_hat(bin_idx, dim_index) = v_hat_i;
     }
 
