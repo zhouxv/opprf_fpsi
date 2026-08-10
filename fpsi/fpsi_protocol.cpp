@@ -17,6 +17,7 @@ void run_fmap_protocol(const CLP &cmd) {
   const u64 dim = cmd.getOr<u64>("d", 2);
   const u64 metric = cmd.getOr<u64>("m", 0);
   const u64 delta = cmd.getOr<u64>("delta", 10);
+  const u64 intersection_size = cmd.getOr("i", 15);
   const u64 trait = cmd.getOr("trait", 1);
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
@@ -38,6 +39,7 @@ void run_fmap_protocol(const CLP &cmd) {
   spdlog::info("set_size          : {}", set_size);
   spdlog::info("dimension         : {} ", dim);
   spdlog::info("delta             : {} ", delta);
+  spdlog::info("intersection_size : {}", intersection_size);
   spdlog::info("trait             : {}", trait);
   spdlog::info("fmap_type         : {}", fm_type_str);
   spdlog::info("***********************************************************");
@@ -45,8 +47,8 @@ void run_fmap_protocol(const CLP &cmd) {
   vector<double> time_sums(trait, 0);
   vector<double> comm_sums(trait, 0.0);
   for (u64 i = 0; i < trait; i++) {
-    auto tmp = run_fmap_protocol(set_size, dim, delta, set_size, ip, port,
-                                 fm_type, detailed);
+    auto tmp = run_fmap_protocol(set_size, dim, delta, intersection_size, ip,
+                                 port, fm_type, detailed);
     time_sums[i] = tmp.first;
     comm_sums[i] = tmp.second;
   }
@@ -168,6 +170,11 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 DELTA,
     recv.print_time();
     spdlog::info("***********************************************************");
     auto count = 0;
+  }
+
+  // output cmpid
+  for (u64 i = 0; i < PT_NUM; i++) {
+    spdlog::info("cmpid[{}]: {} {}", i, recv.cmp_ID[i], sender.cmp_ID[i]);
   }
 
   return {online_time, total_com};
