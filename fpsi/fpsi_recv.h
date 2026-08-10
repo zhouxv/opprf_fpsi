@@ -4,6 +4,7 @@
 #include "fpsi_base.h"
 #include "opprf/Defines.h"
 #include "opprf/SimpleIndex.h"
+#include "ufmap/ufmap.h"
 #include "utils/params_selects.h"
 
 #include <coproto/Socket/Socket.h>
@@ -24,6 +25,7 @@ public:
   const u64 PTS_NUM;    // number of point set
   const u64 METRIC;     // L_?
   const u64 THREAD_NUM; // number of threads
+  const u64 FM_TYPE;    // fuzzy map type
 
   // References to some core objects
   vector<pt> &pts; // point set
@@ -47,10 +49,11 @@ public:
 
   FPSIRecv(u64 dim, u64 delta, u64 pt_num, u64 metric, u64 thread_num,
            vector<pt> &pts, ipcl::KeyPair &fmap_recv_key,
-           ipcl::KeyPair &fmap_sender_key, vector<coproto::Socket> &sockets)
+           ipcl::KeyPair &fmap_sender_key, vector<coproto::Socket> &sockets,
+           u64 FM_TYPE)
       : DIM(dim), DELTA(delta), PTS_NUM(pt_num), METRIC(metric),
         THREAD_NUM(thread_num), pts(pts), fmap_recv_key(fmap_recv_key),
-        fmap_sender_key(fmap_sender_key), FPSIBase(sockets) {
+        fmap_sender_key(fmap_sender_key), FPSIBase(sockets), FM_TYPE(FM_TYPE) {
     // Parameter Initialization
     SIDE_LEN = 2 * delta;
     BLK_CELLS = 1 << dim;
@@ -70,6 +73,7 @@ public:
   vector<block> cmp_ID;
   vector<block> recv_data;
   CmpFuzzyPSI::FmapReceiver cmp_fmap_receiver;
+  CmpFuzzyPSI::uFmapReceiver cmp_ufmap_receiver;
   void cmp_fmap_offline();
   void cmp_fmap_online();
   void psi_offline_cmp();

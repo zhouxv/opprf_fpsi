@@ -21,6 +21,16 @@ void run_fmap_protocol(const CLP &cmd) {
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
   const bool detailed = cmd.isSet("detail");
+  const u64 fm_type = cmd.getOr<u64>("fm", 1);
+
+  string fm_type_str;
+  switch (fm_type) {
+  case 1:
+    fm_type_str = "cmp_fmap";
+    break;
+  default:
+    fm_type_str = "uFmap";
+  }
 
   // run fmap protocol
   u64 set_size = 1 << num;
@@ -29,13 +39,14 @@ void run_fmap_protocol(const CLP &cmd) {
   spdlog::info("dimension         : {} ", dim);
   spdlog::info("delta             : {} ", delta);
   spdlog::info("trait             : {}", trait);
+  spdlog::info("fmap_type         : {}", fm_type_str);
   spdlog::info("***********************************************************");
 
   vector<double> time_sums(trait, 0);
   vector<double> comm_sums(trait, 0.0);
   for (u64 i = 0; i < trait; i++) {
-    auto tmp =
-        run_fmap_protocol(set_size, dim, delta, set_size, ip, port, detailed);
+    auto tmp = run_fmap_protocol(set_size, dim, delta, set_size, ip, port,
+                                 fm_type, detailed);
     time_sums[i] = tmp.first;
     comm_sums[i] = tmp.second;
   }
@@ -48,17 +59,17 @@ void run_fmap_protocol(const CLP &cmd) {
 
   //  print result
 
-  cout << std::format("[cmp-fmap]  {:^5}  {:^5}  {:^5}  "
+  cout << std::format("[{}]  {:^5}  {:^5}  {:^5}  "
                       "{:^10.3f}  {:^10.3f}",
-                      set_size, dim, delta, avg_com, avg_online_time)
+                      fm_type_str, set_size, dim, delta, avg_com,
+                      avg_online_time)
        << endl;
 }
 
-std::pair<double, double> run_fmap_protocol(const u64 PT_NUM, const u64 DIM,
-                                            const u64 DELTA,
-                                            const u64 INTERSECTION_SIZE,
-                                            const string IP, const u64 PORT,
-                                            const bool DETAILED) {
+std::pair<double, double>
+run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 DELTA,
+                  const u64 INTERSECTION_SIZE, const string IP, const u64 PORT,
+                  const u64 FM_TYPE, const bool DETAILED) {
   simpleTimer timer;
 
   // Paillier keys initialization
@@ -97,16 +108,16 @@ std::pair<double, double> run_fmap_protocol(const u64 PT_NUM, const u64 DIM,
 
   // FPSI objects initialization
   FPSIRecv recv(DIM, DELTA, PT_NUM, 0, 1, recv_pts, fmap_recv, fmap_sender,
-                socketPair0);
+                socketPair0, FM_TYPE);
   FPSISender sender(DIM, DELTA, PT_NUM, 0, 1, send_pts, fmap_recv, fmap_sender,
-                    socketPair1);
+                    socketPair1, FM_TYPE);
 
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   // Fmap Offline phase
   /*--------------------------------------------------------------------------------------------------------------------------------*/
 
   timer.start();
-  // fmap_offline(sender, recv);
+
   std::thread recv_cmp_fmap_offline(
       std::bind(&FPSIRecv::cmp_fmap_offline, &recv));
   std::thread send_cmp_fmap_offline(
@@ -172,13 +183,27 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
   const u64 trait = cmd.getOr("trait", 1);
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
-  const u64 pro_type = cmd.getOr<u64>("fm", 1);
+  const u64 fm_type = cmd.getOr<u64>("fm", 1);
 
   const bool pts_same = cmd.isSet("same");
   const bool detailed = cmd.isSet("detail");
   const bool fake = cmd.isSet("fake");
 
-  string pro_type_str = (pro_type == 1) ? "spatial_hash_fpsi" : "cmp_fpsi";
+  string fmap_type_str;
+
+  switch (fm_type) {
+  case 1:
+    fmap_type_str = "cmp_fmap";
+    break;
+  case 2:
+    fmap_type_str = "uFmap";
+    break;
+  case 3:
+    fmap_type_str = "spatial_hash";
+    break;
+  default:
+    fmap_type_str = "unknown";
+  }
 
   // check intersection size
   auto set_size = 1 << num;
@@ -196,7 +221,7 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
   spdlog::info("intersection_size : {}", intersection_size);
   spdlog::info("trait             : {}", trait);
 
-  spdlog::info("fmap_type         : {}", pro_type_str);
+  spdlog::info("fmap_type         : {}", fmap_type_str);
   spdlog::info("pts_same          : {}", pts_same);
   spdlog::info("detailed          : {}", detailed);
   spdlog::info("fake              : {}", fake);
@@ -207,7 +232,7 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
   for (u64 i = 0; i < trait; i++) {
     std::pair<double, double> tmp =
         run_fpsi_protocol_extra(set_size, dim, metric, delta, intersection_size,
-                                ip, port, pro_type, pts_same, detailed, fake);
+                                ip, port, fm_type, pts_same, detailed, fake);
     time_sums[i] = tmp.first;
     comm_sums[i] = tmp.second;
   }
@@ -222,7 +247,7 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
 
   cout << std::format("[{}]  {:^5}  𝐿{}  {:^5}  {:^5}  "
                       "{:^10.3f}  {:^10.3f}",
-                      pro_type_str, set_size, mertric_str, dim, delta, avg_com,
+                      fmap_type_str, set_size, mertric_str, dim, delta, avg_com,
                       avg_online_time)
        << endl;
 
@@ -272,33 +297,30 @@ run_fpsi_protocol_extra(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
 
   // initialize parties
   FPSIRecv recv(DIM, DELTA, PT_NUM, METRIC, 1, recv_pts, fmap_recv, fmap_sender,
-                socketPair0);
+                socketPair0, FM_TYPE);
   FPSISender sender(DIM, DELTA, PT_NUM, METRIC, 1, send_pts, fmap_recv,
-                    fmap_sender, socketPair1);
+                    fmap_sender, socketPair1, FM_TYPE);
 
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   // PSI Offline phase
   /*--------------------------------------------------------------------------------------------------------------------------------*/
-  auto fpsi_offline = [&](FPSISender &s, FPSIRecv &r, bool fake) {
-    // FM_TYPE==1 : spatial hash fmap
-    // else:        cmp fmap
-    if (FM_TYPE == 1) {
-      std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_sh, &r));
-      std::thread send_offline(std::bind(&FPSISender::psi_offline_sh, &s));
-      recv_offline.join();
-      send_offline.join();
-      return;
-    } else {
-      std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_cmp, &r));
-      std::thread send_offline(std::bind(&FPSISender::psi_offline_cmp, &s));
-      recv_offline.join();
-      send_offline.join();
-      return;
-    }
-  };
 
   timer.start();
-  fpsi_offline(sender, recv, FAKE);
+  // FM_TYPE==1 : cmp fmap
+  // FM_TYPE==2 : uFmap
+  // FM_TYPE==3 : spatial hash fmap
+  if (FM_TYPE == 3) {
+    std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_sh, &recv));
+    std::thread send_offline(std::bind(&FPSISender::psi_offline_sh, &sender));
+    recv_offline.join();
+    send_offline.join();
+  } else {
+    std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_cmp, &recv));
+    std::thread send_offline(std::bind(&FPSISender::psi_offline_cmp, &sender));
+    recv_offline.join();
+    send_offline.join();
+  }
+
   timer.end("protocol_offline");
   spdlog::info("PSI Offline phase finished !!");
 
@@ -307,7 +329,7 @@ run_fpsi_protocol_extra(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   timer.start();
 
-  if (FM_TYPE == 1) {
+  if (FM_TYPE == 3) {
     // spatial hash PSI online phase
     std::thread recv_msg(std::bind(&FPSIRecv::psi_online_sh, &recv));
     std::thread send_msg(std::bind(&FPSISender::psi_online_sh, &sender));

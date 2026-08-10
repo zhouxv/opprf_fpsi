@@ -648,8 +648,14 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
 cmp fmap
 */
 void FPSIRecv::cmp_fmap_offline() {
-  macoro::sync_wait(cmp_fmap_receiver.setUp(PTS_NUM, PTS_NUM, DIM, DELTA, 0,
-                                            recv_prng, sockets[0]));
+  if (FM_TYPE == 1) {
+    macoro::sync_wait(cmp_fmap_receiver.setUp(PTS_NUM, PTS_NUM, DIM, DELTA, 0,
+                                              recv_prng, sockets[0]));
+  } else {
+    macoro::sync_wait(cmp_ufmap_receiver.setUp(PTS_NUM, PTS_NUM, DIM, DELTA, 0,
+                                               recv_prng, sockets[0]));
+  }
+
   sockets[0].mImpl->mBytesReceived = 0;
   sockets[0].mImpl->mBytesSent = 0;
 
@@ -665,8 +671,13 @@ void FPSIRecv::cmp_fmap_offline() {
 
 void FPSIRecv::cmp_fmap_online() {
   cmp_ID.resize(PTS_NUM);
-  macoro::sync_wait(
-      cmp_fmap_receiver.fuzzyMap(recv_data, cmp_ID, recv_prng, sockets[0]));
+  if (FM_TYPE == 1) {
+    macoro::sync_wait(
+        cmp_fmap_receiver.fuzzyMap(recv_data, cmp_ID, recv_prng, sockets[0]));
+  } else {
+    macoro::sync_wait(
+        cmp_ufmap_receiver.fuzzyMap(recv_data, cmp_ID, recv_prng, sockets[0]));
+  }
   insert_commus("receiver_cmp_fmap_online", 0);
   spdlog::info("  Recv cmp_fmap online finished!");
 }

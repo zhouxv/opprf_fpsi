@@ -9,11 +9,10 @@ enum class Role {
 
 void run_fmap_protocol(const CLP &cmd);
 
-std::pair<double, double> run_fmap_protocol(const u64 PT_NUM, const u64 DIM,
-                                            const u64 DELTA,
-                                            const u64 INTERSECTION_SIZE,
-                                            const string IP, const u64 PORT,
-                                            const bool DETAILED);
+std::pair<double, double>
+run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 DELTA,
+                  const u64 INTERSECTION_SIZE, const string IP, const u64 PORT,
+                  const u64 FM_TYPE, const bool DETAILED);
 
 void run_fpsi_protocol_extra(const CLP &cmd);
 
