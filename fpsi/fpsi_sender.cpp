@@ -607,8 +607,14 @@ void FPSISender::mp_ssFMat_lp_sh(CuckooIndex<Mode> &ct) {
 cmp fmap PSI
 */
 void FPSISender::cmp_fmap_offline() {
-  macoro::sync_wait(cmp_fmap_sender.setUp(PTS_NUM, PTS_NUM, DIM, DELTA, 0,
-                                          sender_prng, sockets[0]));
+  if (FM_TYPE == 1) {
+    macoro::sync_wait(cmp_fmap_sender.setUp(PTS_NUM, PTS_NUM, DIM, DELTA, 0,
+                                            sender_prng, sockets[0]));
+  } else {
+    macoro::sync_wait(cmp_ufmap_sender.setUp(PTS_NUM, PTS_NUM, DIM, DELTA,
+                                             METRIC, sender_prng, sockets[0]));
+  }
+
   sockets[0].mImpl->mBytesReceived = 0;
   sockets[0].mImpl->mBytesSent = 0;
 
@@ -624,8 +630,13 @@ void FPSISender::cmp_fmap_offline() {
 void FPSISender::cmp_fmap_online() {
   vector<block> send_oringins(PTS_NUM * DIM);
   cmp_ID.resize(PTS_NUM);
-  macoro::sync_wait(cmp_fmap_sender.fuzzyMap(sender_data, cmp_ID, send_oringins,
-                                             sender_prng, sockets[0]));
+  if (FM_TYPE == 1) {
+    macoro::sync_wait(cmp_fmap_sender.fuzzyMap(
+        sender_data, cmp_ID, send_oringins, sender_prng, sockets[0]));
+  } else {
+    macoro::sync_wait(cmp_ufmap_sender.fuzzyMap(
+        sender_data, cmp_ID, send_oringins, sender_prng, sockets[0]));
+  }
   insert_commus("sender_cmp_fmap_online", 0);
   spdlog::info("  Sender cmp_fmap_online finished!");
 }
