@@ -252,7 +252,7 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
 
   string mertric_str = (metric == 0) ? "inf" : std::to_string(metric);
 
-  cout << std::format("[{}]  {:^5}  𝐿{}  {:^5}  {:^5}  "
+  cout << std::format("[{}_fpsi]  {:^5}  𝐿{}  {:^5}  {:^5}  "
                       "{:^10.3f}  {:^10.3f}",
                       fmap_type_str, set_size, mertric_str, dim, delta, avg_com,
                       avg_online_time)
