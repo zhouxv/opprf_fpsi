@@ -22,11 +22,11 @@ void run_fmap_protocol(const CLP &cmd) {
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
   const bool detailed = cmd.isSet("detail");
-  const u64 fm_type = cmd.getOr<u64>("fm", 1);
+  const u64 fm_type = cmd.getOr<u64>("fm", 0);
 
   string fm_type_str;
   switch (fm_type) {
-  case 1:
+  case 0:
     fm_type_str = "cmp_fmap";
     break;
   default:
@@ -173,9 +173,9 @@ run_fmap_protocol(const u64 PT_NUM, const u64 DIM, const u64 DELTA,
   }
 
   // output cmpid
-  for (u64 i = 0; i < PT_NUM; i++) {
-    spdlog::info("cmpid[{}]: {} {}", i, recv.cmp_ID[i], sender.cmp_ID[i]);
-  }
+  // for (u64 i = 0; i < PT_NUM; i++) {
+  //   spdlog::info("cmpid[{}]: {} {}", i, recv.cmp_ID[i], sender.cmp_ID[i]);
+  // }
 
   return {online_time, total_com};
 }
@@ -190,7 +190,7 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
   const u64 trait = cmd.getOr("trait", 1);
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
-  const u64 fm_type = cmd.getOr<u64>("fm", 1);
+  const u64 fm_type = cmd.getOr<u64>("fm", 0);
 
   const bool pts_same = cmd.isSet("same");
   const bool detailed = cmd.isSet("detail");
@@ -199,13 +199,13 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
   string fmap_type_str;
 
   switch (fm_type) {
-  case 1:
+  case 0:
     fmap_type_str = "cmp_fmap";
     break;
-  case 2:
+  case 1:
     fmap_type_str = "uFmap";
     break;
-  case 3:
+  case 2:
     fmap_type_str = "spatial_hash";
     break;
   default:
@@ -313,10 +313,10 @@ run_fpsi_protocol_extra(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   /*--------------------------------------------------------------------------------------------------------------------------------*/
 
   timer.start();
-  // FM_TYPE==1 : cmp fmap
-  // FM_TYPE==2 : uFmap
-  // FM_TYPE==3 : spatial hash fmap
-  if (FM_TYPE == 3) {
+  // FM_TYPE==0 : cmp fmap
+  // FM_TYPE==1 : uFmap
+  // FM_TYPE==2 : spatial hash fmap
+  if (FM_TYPE == 2) {
     std::thread recv_offline(std::bind(&FPSIRecv::psi_offline_sh, &recv));
     std::thread send_offline(std::bind(&FPSISender::psi_offline_sh, &sender));
     recv_offline.join();
@@ -336,7 +336,7 @@ run_fpsi_protocol_extra(const u64 PT_NUM, const u64 DIM, const u64 METRIC,
   /*--------------------------------------------------------------------------------------------------------------------------------*/
   timer.start();
 
-  if (FM_TYPE == 3) {
+  if (FM_TYPE == 2) {
     // spatial hash PSI online phase
     std::thread recv_msg(std::bind(&FPSIRecv::psi_online_sh, &recv));
     std::thread send_msg(std::bind(&FPSISender::psi_online_sh, &sender));

@@ -95,14 +95,14 @@ This section describes the usage of the executable file located at `./build/main
 ### Command-Line Options
 
 | Flag | Meaning | Optional Values | Description |
-|:----:|:--------|:----------------|:------------|
-| **p** | Protocol Type | `1`: (1-1)-FMAP protocol<br/>(*fig7 in our paper*) (default)<br/>`2`: FPSI protocol | Select which protocol to run |
+| :----: | :-------- | :---------------- | :------------ |
+| **p** | Protocol Type | `1`: FMAP protocol<br/>(default)<br/>`2`: FPSI protocol | Select which protocol to run |
 | **n** | Set Size (logarithm) | Positive integer(s), default: `8` | Input set size = 2^n |
 | **d** | Dimension | Positive integer(s), default: `2` | Dimension of the points |
 | **m** | Metric | `0`: L∞ (default)<br/>`1`: L₁<br/>`2`: L₂ | Distance metric for fuzzy matching |
-| **delta** | Radius/Threshold | `10`, `30`, `60`, `120`, `250` | Distance threshold δ.  |
+| **delta** | Radius/Threshold | `10`, `30`, `60`, `120`, `250` | Distance threshold δ. |
 | **i** | Intersection Size | Positive integer, default: `15` | Number of points in the intersection |
-| **fm** | Fmap Type | `0`: cmp_fmap<br/>`1`: spatial_hash_fmap (default)<br/> | Fuzzy mapping variant to use, only for FPSI protocol |
+| **fm** | Fmap Type | `0`: cmp_fmap(default)<br/>`1`: uFmap<br/>`2`: spatial_hash_fmap<br/> | Fuzzy mapping variant to use, only for FPSI protocol |
 | **ip** | Server IP | IP address string, default: `"127.0.0.1"` | IP address for network communication |
 | **port** | Server Port | Port number, default: `1212` | Starting port number for connections |
 | **trait** | Number of Trials | Positive integer, default: `1` | Number of test runs for averaging results |

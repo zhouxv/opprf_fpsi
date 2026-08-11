@@ -648,7 +648,7 @@ void FPSIRecv::mp_ssFMat_lp_sh(SimpleIndex &st) {
 cmp fmap
 */
 void FPSIRecv::cmp_fmap_offline() {
-  if (FM_TYPE == 1) {
+  if (FM_TYPE == 0) {
     macoro::sync_wait(cmp_fmap_receiver.setUp(PTS_NUM, PTS_NUM, DIM, DELTA, 0,
                                               recv_prng, sockets[0]));
   } else {
@@ -671,7 +671,7 @@ void FPSIRecv::cmp_fmap_offline() {
 
 void FPSIRecv::cmp_fmap_online() {
   cmp_ID.resize(PTS_NUM);
-  if (FM_TYPE == 1) {
+  if (FM_TYPE == 0) {
     macoro::sync_wait(
         cmp_fmap_receiver.fuzzyMap(recv_data, cmp_ID, recv_prng, sockets[0]));
   } else {
