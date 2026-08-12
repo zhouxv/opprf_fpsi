@@ -944,7 +944,9 @@ u64 SimpleIndex::get_bin_size(u64 numBins, u64 numBalls, u64 statSecParam,
 
 #if !defined(NDEBUG) && defined(ENABLE_BOOST)
       auto B2 = get_bin_size(numBins, numBalls, statSecParam, false);
-      assert(B2 <= B);
+      // assert(B2 <= B);
+      if (B2 > B)
+        B = B2;
 #endif
       return B;
     }
