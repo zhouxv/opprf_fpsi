@@ -22,15 +22,19 @@ void run_fmap_protocol(const CLP &cmd) {
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
   const bool detailed = cmd.isSet("detail");
-  const u64 fm_type = cmd.getOr<u64>("fm", 0);
+  u64 fm_type = cmd.getOr<u64>("fm", 0);
 
   string fm_type_str;
   switch (fm_type) {
   case 0:
     fm_type_str = "cmp_fmap";
     break;
-  default:
+  case 1:
     fm_type_str = "uFmap";
+    break;
+  default:
+    fm_type_str = "cmp_fmap";
+    fm_type = 0;
   }
 
   // run fmap protocol
@@ -190,7 +194,7 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
   const u64 trait = cmd.getOr("trait", 1);
   const string ip = cmd.getOr<string>("ip", "127.0.0.1");
   const u64 port = cmd.getOr<u64>("port", 1212);
-  const u64 fm_type = cmd.getOr<u64>("fm", 0);
+  u64 fm_type = cmd.getOr<u64>("fm", 0);
 
   const bool pts_same = cmd.isSet("same");
   const bool detailed = cmd.isSet("detail");
@@ -209,7 +213,8 @@ void run_fpsi_protocol_extra(const CLP &cmd) {
     fmap_type_str = "spatial_hash";
     break;
   default:
-    fmap_type_str = "unknown";
+    fmap_type_str = "cmp_fmap";
+    fm_type = 0;
   }
 
   // check intersection size

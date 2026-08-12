@@ -102,7 +102,7 @@ This section describes the usage of the executable file located at `./build/main
 | **m** | Metric | `0`: L∞ (default)<br/>`1`: L₁<br/>`2`: L₂ | Distance metric for fuzzy matching |
 | **delta** | Radius/Threshold | `10`, `30`, `60`, `120`, `250` | Distance threshold δ. |
 | **i** | Intersection Size | Positive integer, default: `15` | Number of points in the intersection |
-| **fm** | Fmap Type | `0`: cmp_fmap(default)<br/>`1`: uFmap<br/>`2`: spatial_hash_fmap<br/> | Fuzzy mapping variant to use, only for FPSI protocol |
+| **fm** | Fmap Type | `0`: cmp_fmap(default)<br/>`1`: uFmap<br/>`2`: spatial_hash_fmap(only work when `p=2`)<br/> | Fuzzy mapping variant to use, only for FPSI protocol |
 | **ip** | Server IP | IP address string, default: `"127.0.0.1"` | IP address for network communication |
 | **port** | Server Port | Port number, default: `1212` | Starting port number for connections |
 | **trait** | Number of Trials | Positive integer, default: `1` | Number of test runs for averaging results |

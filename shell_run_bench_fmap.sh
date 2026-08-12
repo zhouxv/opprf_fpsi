@@ -24,7 +24,7 @@ printf "[ProType] [Size] [Dim] [Delta] [Com.(MB)] [Time(s)]\n"
 for n in "${ns[@]}"; do
     for dim in "${dims[@]}"; do
       for delta in "${deltas[@]}"; do
-        ./build/main -p 1 -fm 2 -trait 5 -log 0 -i 11 -d $dim -delta $delta -n $n -m $m 
+        ./build/main -p 1 -trait 5 -log 0 -i 11 -d $dim -delta $delta -n $n -m $m
       done
       echo
     done

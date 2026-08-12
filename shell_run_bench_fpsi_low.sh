@@ -25,7 +25,7 @@ for m in "${metrics[@]}"; do
   for n in "${ns[@]}"; do
     for dim in "${dims[@]}"; do
       for delta in "${deltas[@]}"; do
-        ./build/main -p 2 -trait 3 -log 0 -i 11 -d $dim -delta $delta -n $n -m $m -fm 3
+        ./build/main -p 2 -trait 3 -log 0 -i 11 -d $dim -delta $delta -n $n -m $m -fm 2
       done
       echo
     done
