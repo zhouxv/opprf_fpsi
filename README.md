@@ -80,12 +80,12 @@ docker run -dit --name fpsi_opprf --cap-add=NET_ADMIN blueobsidian/fpsi_opprf:la
 ### Step 2: Run Benchmark Scripts
 
 ```bash
-# Reproduces Table 3 data in our paper (FMAP benchmarks)
+# run FMAP benchmarks
 ./shell_run_bench_fmap.sh
-# Reproduces Table 4 data in our paper (FPSI in high dimension case benchmarks)
-./shell_run_bench_fpsi_high.sh
-# Reproduces Table 7 data in our paper (FPSI in low dimension case benchmarks)
+# run FPSI benchmarks in low dimension case
 ./shell_run_bench_fpsi_low.sh 
+# run FPSI benchmarks in high dimension case 
+./shell_run_bench_fpsi_high.sh
 ```
 
 ## 4. Usage Guide for Executable
